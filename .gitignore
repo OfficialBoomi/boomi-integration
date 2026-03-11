@@ -1,0 +1,7 @@
+.claude/
+.vscode/
+hook-logs/
+CLAUDE.local.md
+.env
+.env.*
+.DS_Store
