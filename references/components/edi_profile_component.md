@@ -477,7 +477,7 @@ The same principle applies at the loop level. When an entire loop repeats with d
 | `position` | string | - | Position in hierarchy |
 | `mandatory` | boolean | false | Required segment |
 | `repeatAction` | enum | - | Repeat action type |
-| `maxUse` | int | -1 | Maximum occurrences (not enforced at runtime per Boomi docs and runtime confirmation; useful as metadata and cultural standard) |
+| `maxUse` | int | -1 | Maximum occurrences (not enforced at runtime; useful as metadata and cultural standard) |
 | `loopingOption` | enum | "unique" | `unique` or `occurrence` |
 | `useAdditionalCriteria` | boolean | false | Enable qualifier matching |
 | `additionalElementKey` | int | -1 | Key of qualifier element |

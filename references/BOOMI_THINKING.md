@@ -7,6 +7,7 @@ This guide covers Boomi's core mental models and development philosophy.
 - X12 EDI Profile Design Mental Model
 - Dependency-Aware Development
 - Properties as Variables
+- Document Tracking (Account-Level)
 - Datetime Field Pipeline
 - Connector Architecture & Behavior
 - Step Design Principles
@@ -86,6 +87,13 @@ You CAN create a process with placeholder steps before the referenced components
 - Use all-caps naming convention: `DPP_USEFUL_VARIABLE_NAME` or `DDP_USEFUL_VARIABLE_NAME`
 - **Environment** = A deployment target grouping one or more runtimes (Atoms) with shared configuration.
 - **Environment Extensions** = Connections, operations, and DPPs can be made configurable per-environment.
+
+## Document Tracking (Account-Level)
+Boomi accounts can define up to 20 **custom tracked fields** (Setup > Account > Document Tracking). These are account-wide field slots — not tied to any specific component type. Once defined at the account level, tracked fields can be bound to specific data sources in Trading Partner components, connector operations, or other contexts.
+
+Each tracked field gets an account-scoped `fieldId` (a long integer). These IDs are **not universal platform constants** — they are assigned per-account when fields are created. To discover a given account's tracked field IDs, query the `CustomTrackedField` API object. Tracked field values appear in the Boomi dashboard for document-level visibility across process executions.
+
+A use is in B2B/EDI Trading Partner components, where tracked fields extract values (e.g., PO Number from BEG03) from EDI documents for correlation and dashboard visibility. But the feature itself is a general-purpose platform capability.
 
 ## Datetime Field Pipeline
 Profile fields with `dataType="datetime"` used in a map component, trigger Boomi's internal datetime processing. The `dateFormat` attribute controls representation external to the map only - within the map, Boomi always uses `yyyyMMdd HHmmss.SSS`.
@@ -244,6 +252,13 @@ Error handling with dual paths: Try for normal processing, Catch for errors. Pla
 **Error halting:** When a document errors, processing halts for that document - subsequent steps and parallel branches don't execute. Try-catch provides a handling path instead of process failure.
 
 **Catch path pattern:** Always include Notify step to log error details (`meta.base.catcherrorsmessage`) and further handling or termination for the document as necessary.
+
+### Dragpoints and Output Path Wiring
+The `<dragpoints>` element is **required** on every shape — omitting it causes a schema validation failure. An empty `<dragpoints/>` means no outgoing connections and is valid for terminal shapes.
+
+`<dragpoint>` children represent wired connections via `toShape="shapeN"`. For unwired output paths (e.g., a TP Send Errors path not yet connected), use `toShape="unset"` — this is the conventional representation and is preserved exactly by the platform. The GUI renders available output paths based on shapetype and configuration, independent of what `<dragpoint>` children exist in the XML.
+
+Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring at the API level — some paths wired, others with `toShape="unset"`. However, always wire all paths to a downstream step (even if just a Stop step) as a best practice.
 
 ### Terminal Steps (Return Documents vs Stop)
 **Return Documents:** Returns documents to calling context (parent process or external caller). In subprocess, creates return branches in parent. In listener, returns API response. Documents retain all properties when returned.

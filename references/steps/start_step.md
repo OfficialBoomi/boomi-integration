@@ -99,6 +99,9 @@ When using WSS, the process element typically includes:
 
 See `components/process_component.md` for the full decision table of recommended process options by start step type.
 
+### 4. Trading Partner Start Configuration
+B2B/EDI processes use a Trading Partner Start shape with `<tradingpartneraction actionType="Listen">`. See `steps/trading_partner_steps.md` for full reference.
+
 ## Common Patterns
 - Position at left side of canvas (typical x="48.0" or x="96.0")
 - Connect to setup steps (Set Properties) or main logic

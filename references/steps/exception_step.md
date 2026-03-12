@@ -40,7 +40,7 @@ Exception is a terminal shape — `<dragpoints/>` is always empty/self-closing.
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `stopsingledoc` | boolean | `false` | `true`: only the document that reaches the Exception step fails; other documents in the batch continue processing normally. `false`: the process terminates immediately and remaining documents' processing paths are abandoned (they are not individually "marked as failed" — they simply never execute). |
-| `stopProcessReturnSingleDoc` | boolean | `false` | Present in XSD and platform XML. Not yet validated at runtime — do not make behavioral claims about this attribute. |
+| `stopProcessReturnSingleDoc` | boolean | `false` | Present in platform XML. Runtime behavior unconfirmed — do not make behavioral claims about this attribute. |
 | `title` | string | | Descriptive title for the exception configuration. Appears in the GUI. |
 
 ## Parameters

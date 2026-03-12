@@ -23,6 +23,7 @@ All tools use smart path resolution to automatically find the skill and componen
 - **Creating connectors**: connection_component.md + operation_component.md + connector_step.md + BOOMI_THINKING.md
 - **Map transformations**: map_component.md + map_component_functions.md + source/target profile docs
 - **Event Streams**: event_streams_connection + operation + steps + platform_entities/event_streams.md
+- **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
 - **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
 - **Flow Services**: fss_operation_component + fss_start_step + flow_service_component + platform_entities/flow.md
@@ -110,6 +111,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── flow_service_component.md     # Use when: wrapping Integration processes as Flow-discoverable services, exposing actions to Boomi Flow
 │   │   ├── mcp_server_connection_component.md  # Use when: creating MCP Server connections - server naming, authentication, conversation starters
 │   │   ├── mcp_server_operation_component.md   # Use when: defining MCP tools - JSON schema for tool parameters, HTML encoding, dynamic operation fields
+│   │   ├── trading_partner_component.md       # Use when: creating B2B/EDI trading partner components - AS2 config, X12 ISA/GS control info, document types, tracked fields, acknowledgments
 │   │   └── process_extensions.md              # Use when: making connections, operations, or DPPs configurable per-environment via processOverrides and the Environment Extensions API
 │   │
 │   ├── steps/                   # Process step XML reference documentation
@@ -136,9 +138,11 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── return_documents_step.md # Terminal step returning documents to caller. Use when: ending subprocess execution and returning data to parent, returning API responses
 │   │   ├── fss_start_step.md    # Flow Services Server start step. Use when: creating process entry points for Flow-callable Integration processes
 │   │   ├── mcp_server_start_step.md  # MCP Server entry point. Use when: creating listener processes that expose tools to AI agents via MCP protocol
+│   │   ├── trading_partner_steps.md # B2B/EDI start and send shapes. Use when: building processes that receive from or send to trading partners via AS2, FTP, SFTP, etc.
 │   │   └── shape_notes.md       # Canvas annotations visible in GUI. Use when: user explicitly requests adding documentation notes to process shapes
 │   │
 │   └── platform_entities/       # Platform service configuration and management
+│       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, validation, communication connectors
 │       ├── event_streams.md     # Topics, subscriptions, and GraphQL entity management
 │       ├── boomi_for_sap.md     # Boomi for SAP architecture, scope boundaries, JSON-formatted SAP integration via Core module
 │       ├── flow.md              # Boomi Flow integration: FSS deployment workflow, Flow Service components, multi-platform development (build Integration first, then Flow)

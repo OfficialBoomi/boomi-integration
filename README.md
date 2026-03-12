@@ -23,7 +23,7 @@ This is a distributable skill that provides AI coding agents with knowledge and 
 
 Install through the Claude Code plugin system — the skill is included automatically:
 
-1. Add the Boomi marketplace: `/plugin marketplace add git@bitbucket.org:officialboomi/boomi-marketplace.git`
+1. Add the Boomi marketplace: `/plugin marketplace add OfficialBoomi/boomi-marketplace`
 2. Install the plugin: `/plugin install bc-integration@boomi-marketplace`
 
 Alternatively, navigate the `/plugin` menu interactively within Claude Code to add the marketplace and install.

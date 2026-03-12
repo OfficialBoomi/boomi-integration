@@ -28,6 +28,7 @@ Process options are attributes on the `<process>` XML element that control execu
 | Data Passthrough (`<passthroughaction/>`) | `false` | `false` | `false` |
 | WSS Listener (`connectorType="wss"`) | `true` | `false` | `false` |
 | FSS Listener (`connectorType="fss"`) | `true` | `false` | `false` |
+| Trading Partner Start (`<tradingpartneraction actionType="Listen">`) | `true` | `false` | `false` |
 | MCP Server (`connectorType="officialboomi-X3979C-mcp-prod"`) | `true` | `false` | `true` |
 | Event Streams Listen (`connectorType="officialboomi-X3979C-events-prod"`) | `true` | `false` | `false` |
 
