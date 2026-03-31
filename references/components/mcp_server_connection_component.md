@@ -40,7 +40,10 @@ The MCP Server Connection component configures authentication and server identit
   folderId="{folder-id}"
   deleted="false"
   currentVersion="true">
-  <bns:encryptedValues/>
+  <bns:encryptedValues>
+    <bns:encryptedValue isSet="true"
+      path="//GenericConnectionConfig/field[@type='customproperties']/customProperties/properties[@encrypted='true']/@value"/>
+  </bns:encryptedValues>
   <bns:description>{description}</bns:description>
   <bns:object>
     <GenericConnectionConfig xmlns="">
@@ -48,7 +51,7 @@ The MCP Server Connection component configures authentication and server identit
       <field id="auth" type="string" value="API_TOKEN"/>
       <field id="apiTokens" type="customproperties">
         <customProperties>
-          <properties key="{token-name}" value="{uuid-token}"/>
+          <properties encrypted="true" key="{token-name}" value="{uuid-token}"/>
         </customProperties>
       </field>
       <field id="conversationStarters" type="customproperties">
@@ -100,11 +103,13 @@ Write intentional prompts so MCP clients know which tool to use:
 <field id="auth" type="string" value="API_TOKEN"/>
 <field id="apiTokens" type="customproperties">
   <customProperties>
-    <properties key="PRODUCTION" value="6dee4392-6021-4362-b2bd-19c08aeed88d"/>
-    <properties key="DEVELOPMENT" value="b6a3b83e-dfd1-4092-90d4-2751ba9419b0"/>
+    <properties encrypted="true" key="PRODUCTION" value="{uuid-token}"/>
+    <properties encrypted="true" key="DEVELOPMENT" value="{uuid-token}"/>
   </customProperties>
 </field>
 ```
+
+The `encrypted="true"` attribute on each `<properties>` element, paired with the `encryptedValues` XPath (see XML Structure above), tells the platform to encrypt the token value on push. Subsequent pulls return an encrypted hex blob — the plaintext UUID is never exposed again.
 
 - Token values must be valid UUIDs
 - Keys are client/environment identifiers
@@ -112,7 +117,12 @@ Write intentional prompts so MCP clients know which tool to use:
 - **Client Authentication Headers:** Clients use either:
   - `Authorization: Bearer <token>`
   - `X-API-Key: <token>`
-- Keep readable tokens secure - once encrypted on platform, cannot be decrypted
+
+**New connections:** Use a generated UUID as the token value with `encrypted="true"`. The platform encrypts on first push. After push, re-pull to get the encrypted value.
+
+**Pulled connections (encrypted):** Preserve `<bns:encryptedValues>` and encrypted token values exactly as-is. Never modify encrypted values. Note: encrypted hex values change on every push/pull cycle due to platform-side re-encryption with a new IV/nonce — this is expected behavior, not corruption. The platform may also normalize to one `<bns:encryptedValue>` entry per encrypted property, even if only one XPath entry was originally pushed.
+
+**Pulled connections (plaintext):** If a pulled connection has apiTokens without `encrypted="true"` (legacy or manually created), add `encrypted="true"` to each `<properties>` element and populate `<bns:encryptedValues>` with the XPath shown above. Push to trigger encryption, then re-pull to get encrypted values. Inform the user that tokens were upgraded to encrypted storage.
 
 ### No Authentication (Testing Only)
 
@@ -130,7 +140,8 @@ Write intentional prompts so MCP clients know which tool to use:
 ## Notes
 
 1. **Namespace Requirement**: `GenericConnectionConfig` must have `xmlns=""` (empty namespace)
-2. **Token Security**: Tokens are stored as plain text in XML; encrypted only after platform push
+2. **Token Encryption**: Always include `encrypted="true"` on apiTokens `<properties>` elements with the matching `encryptedValues` XPath. Without it, tokens remain in permanent plaintext. See Authentication Patterns above for the full mechanism.
 3. **Connection Sharing**: One connection can serve multiple operations/tools
 4. **Conversation Starters**: Optional hints help AI agents discover server capabilities
 5. **SSL**: Not supported at connector level; use external SSL termination (gateway/load balancer)
+6. **Do NOT use `type="password"`** for the apiTokens field. This encrypts the value but flattens the key-value structure, breaking named multi-token support.

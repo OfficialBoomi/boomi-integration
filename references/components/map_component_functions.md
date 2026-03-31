@@ -273,6 +273,38 @@ See map_component.md "Datetime Field Mapping" section for complete decision matr
 **Output Key Pattern**: Document property set functions have no outputs (side effect only)
 - propertyId prefixed with "dynamicdocument."
 
+### 8. Cross Reference Lookup
+
+**Purpose**: Look up values from a Cross Reference Table component by matching one or more input columns and returning one or more output columns.
+
+**Minimal Configuration**:
+```xml
+<FunctionStep cacheEnabled="true" cacheOption="none" category="Lookup"
+              key="1" name="Cross Reference Lookup" position="1"
+              sumEnabled="false" type="CrossRefLookup" x="10.0" y="10.0">
+  <Inputs>
+    <Input key="1" name="source_code"/>
+  </Inputs>
+  <Outputs>
+    <Output key="2" name="target_code"/>
+  </Outputs>
+  <Configuration>
+    <CrossRefLookup crossRefTableId="{CROSSREF_COMPONENT_ID}"
+                    skipLookupIfNoInputs="true">
+      <Input index="1" name="source_code" refId="1"/>
+      <Output index="2" name="target_code" refId="2"/>
+    </CrossRefLookup>
+  </Configuration>
+</FunctionStep>
+```
+
+**Key details:**
+- `refId` is 1-based (column 1 = first `columnHeader` in the table)
+- `index` in Configuration must match the `key` of the corresponding Input/Output
+- Supports multiple inputs (match on 2+ columns) and multiple outputs
+
+See `cross_reference_table_component.md` for full details: multi-input examples, parameter value usage outside maps, match types, column indexing, and lookup behavior.
+
 ## Complete Working Example
 
 ```xml

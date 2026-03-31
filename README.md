@@ -1,6 +1,12 @@
 # boomi-integration Skill
 
-A skill for building Boomi integration processes programmatically with AI coding agents. The intended audience of this README.md document is humans seeking to understand the skill.
+The official Boomi Companion skill for building Boomi integration processes programmatically with AI coding agents. The intended audience of this README.md document is humans seeking to understand the skill.
+
+This project is licensed under the [BSD-2-Clause License](LICENSE). If you fork or modify this code, you should not use the name "Boomi" for your version.
+
+## Feedback & Issues
+
+Found a bug or have a feature idea? Open an issue with a clear description, steps to reproduce, and any relevant error messages.
 
 ## What is this?
 
@@ -123,6 +129,7 @@ Agent: [Deploys process to runtime]
 
 The skill makes the following CLI tools available to the agent:
 
+- `boomi-env-check.sh` - Checks which .env variables are set without revealing values
 - `boomi-folder-create.sh` - Creates project folders
 - `boomi-component-create.sh` - Creates new components
 - `boomi-component-push.sh` - Updates existing components

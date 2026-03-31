@@ -588,7 +588,7 @@ For X12, the required structural chain within PartnerInfo is:
 
 ### Attributes
 
-All tested attributes are optional at the API level — the platform accepts a component with zero attributes on `TradingPartner`, `X12Options`, `ISAControlInfo`, `GSControlInfo`, and `CommunicationOption`. The bare minimum X12 trading partner to be accepted by the platform is just empty element shells (but more detail would be required for a usable component).
+All attributes are optional at the API level — the platform accepts a component with zero attributes on `TradingPartner`, `X12Options`, `ISAControlInfo`, `GSControlInfo`, and `CommunicationOption`. The bare minimum X12 trading partner to be accepted by the platform is just empty element shells (but more detail would be required for a usable component).
 
 ### Bare Minimum X12 Trading Partner
 

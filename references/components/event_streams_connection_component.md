@@ -36,25 +36,33 @@ SubType: `officialboomi-X3979C-events-prod`
 | connectionType | string | Yes | Value: "Yes" |
 | environmentToken | password | Yes | Encrypted environment-specific token from Event Streams |
 
-## Environment Token Acquisition
+## Event Streams Infrastructure Setup
 
-**Using CLI Tool (Recommended):**
+The CLI tool manages Event Streams infrastructure (topics, subscriptions, tokens) — these are platform entities, not connection credentials.
+
+**Infrastructure setup via CLI (safe — no credentials):**
 ```bash
-# Query existing tokens
-bash scripts/event-streams-setup.sh query-tokens
+bash scripts/event-streams-setup.sh create-topic "MyTopic"
+bash scripts/event-streams-setup.sh create-subscription "MyTopic" "MySubscription"
+bash scripts/event-streams-setup.sh query-topic "MyTopic"
+```
 
-# Create new token
+**Token provisioning via CLI:** `create-token` provisions a new token. The script omits the token value from the response — only id, name, and permissions are returned. After provisioning, instruct the user to retrieve the token from the Boomi GUI and configure the connection there.
+```bash
 bash scripts/event-streams-setup.sh create-token "MyToken"
 ```
 
-The tool returns the token value in the `data` field. Use this value in the connection component's `environmentToken` field.
+**Token queries:** `query-tokens` returns token metadata (id, name, permissions, expiration) without token values.
+```bash
+bash scripts/event-streams-setup.sh query-tokens
+```
 
 **Token Management:**
 - Token permissions (`allowConsume`/`allowProduce`) control which operations can use the token
 - Tokens expire after 365 days (default) and require recreation
 - Same token can be shared across multiple connection components
 - Platform encrypts token value automatically on push
-- GraphQL API available for manual token creation and management (see references/platform_entities/event_streams.md)
+- See `references/platform_entities/event_streams.md` for GraphQL API details
 
 ## Notes
 

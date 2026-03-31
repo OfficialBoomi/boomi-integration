@@ -95,7 +95,7 @@ The error `Attempting dynamic document property extraction with no document` occ
 
 ## Parameter Value Types
 - **current**: Logs the entire current document
-- **track**: References DDPs or DPPs
+- **track**: References DDPs only (for DPPs, use `valueType="process"`)
 - **process**: References process properties
 - **static**: Hard-coded values
 - **date**: Date/time values (current or relative)

@@ -208,33 +208,21 @@ Environment variable references like `${APPLICATION_API_KEY}` are stored literal
 ```
 **RESULT**: Platform executes with actual credential value → API calls succeed
 
-### Critical Rule: Use Actual Credential Values in XML Components
+### Critical Rule: No Variable References in XML Components
 
-- **XML Component Files**: Must contain real API keys, passwords, tokens - NO variable references
-- **YAML Config Files**: CAN use `${ENV_VAR}` patterns (resolved by Python CLI tools)
-- **Platform Reality**: Boomi has no access to your local environment variables
-
-### Reference Context Quick Guide - Variable Substitution Support
-
-- `${ENV_VAR}` → **YAML config files ONLY** (`config/*.yaml` - resolved by Python CLI tools)
+- **XML Component Files**: Must not contain `${ENV_VAR}` or other variable references — Boomi has no access to local environment variables
 - `{ComponentName}` → **Local XML ONLY** (resolved by agent orchestration during creation)
-- **Actual credential values** → **XML components REQUIRED** (no substitution - sent as-is to platform)
 
-### Preferred Solution - Platform Encrypted Credentials
+### Connection Workflow
 
-For production credentials, use Boomi's platform encryption:
-1. Configure credentials via GUI (one-time setup)
-2. Pull component - encrypted values preserved
-3. Modify logic while maintaining `encrypted="true"` fields
-4. Push back - encryption intact, credentials never exposed
+See `BOOMI_THINKING.md` § Connection Discovery and `cli_tool_reference.md` § Credential Management for the full connection resolution and credential handling workflows.
 
 ### Pre-Push Checklist
 
 Before pushing ANY component with credentials:
-1. Search for `${...}` patterns in connection/operation XML files
-2. Replace with actual credential values from `.env` file
-3. Never commit real credentials - use demo values for development
-4. Production credentials must be encrypted via Boomi UI after creation
+1. Search for `${...}` patterns in connection/operation XML files — remove any variable references
+2. Verify `type="password"` fields are not populated with real credentials
+3. Never commit real credentials to version control
 
 ---
 

@@ -64,7 +64,7 @@ Routes based on a DDP value. Common source.
 </routeproperty>
 ```
 
-Dynamic Process Properties follow the same `trackparameter` pattern used elsewhere — `propertyId="dynamicprocess.DPP_NAME"`.
+For DPPs, use `valueType="process"` with `<processparameter>` instead — `trackparameter` only reads DDPs.
 
 ### Profile Element (`valueType="profile"`)
 Routes based on a field value from the current document's profile. Common source.

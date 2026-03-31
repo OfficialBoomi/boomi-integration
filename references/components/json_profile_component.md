@@ -188,11 +188,62 @@ JSON profiles support instance identifiers on repeating arrays using `<tagLists>
 
 | Attribute | Type | Required | Purpose |
 |-----------|------|----------|---------|
-| `identifierKey` | int | Yes | Key of the `JSONObjectEntry` that holds the qualifier value |
-| `identifierName` | string | Yes | Name of that entry (e.g., "type") |
-| `identifierType` | enum | No | `"value"` (match by qualifier value) or `"occurrence"` (match by position) |
+| `identifierKey` | int | Yes | For `identifierType="value"`: key of the `JSONObjectEntry` that holds the qualifier value. For `identifierType="occurrence"`: use `-1` (conventional; runtime ignores this value for occurrence expressions) |
+| `identifierName` | string | Yes | For value type: name of the qualifier entry (e.g., `"type"`). For occurrence type: `"occurrence"` |
+| `identifierType` | enum | No | `"value"` (match by qualifier value) or `"occurrence"` (match by position within the filtered subset) |
 
-The `<identifierValue>` child element holds the qualifier string to match.
+The `<identifierValue>` child element holds:
+- For `identifierType="value"`: the qualifier string to match
+- For `identifierType="occurrence"`: a 1-based positional selector — `"1"` for first, `"2"` for second, `"-1"` for last. `"0"` is invalid and causes a silent map failure (no output documents produced)
+
+### Occurrence (Positional) Selection
+
+An occurrence TagExpression selects an array element by position. It can be used standalone (select the Nth or last element in the array) or combined with a value TagExpression to select by position within the filtered subset.
+
+**Standalone — last element in array:**
+```xml
+<TagList elementKey="5" listKey="1">
+  <GroupingExpression operator="and">
+    <TagExpression identifierKey="-1" identifierName="occurrence" identifierType="occurrence">
+      <identifierValue>-1</identifierValue>  <!-- 1-based: 1=first, 2=second, -1=last -->
+    </TagExpression>
+  </GroupingExpression>
+</TagList>
+```
+
+**Combined with value filter — last element where type="text":**
+```xml
+<TagList elementKey="5" listKey="1">
+  <GroupingExpression operator="and">
+    <TagExpression identifierKey="7" identifierName="type" identifierType="value">
+      <identifierValue>text</identifierValue>
+    </TagExpression>
+    <TagExpression identifierKey="-1" identifierName="occurrence" identifierType="occurrence">
+      <identifierValue>-1</identifierValue>
+    </TagExpression>
+  </GroupingExpression>
+</TagList>
+```
+
+When combined, the occurrence operates within the value-filtered subset, not the full array.
+
+### Qualifiers
+
+Qualifiers must be added to profile elements that participate in instance identification. They are required for the instance identifier configuration to be visible and editable in the Boomi GUI. Always include them even when generating profiles programmatically.
+
+Add a `<Qualifiers>` block to the element referenced by `identifierKey` in value-type TagExpressions:
+
+```xml
+<JSONObjectEntry key="7" name="type" ...>
+  <Qualifiers>
+    <QualifierList>
+      <Qualifier description="type=text" qualifierValue="text"/>
+    </QualifierList>
+  </Qualifiers>
+</JSONObjectEntry>
+```
+
+The `description` attribute is a human-readable label (freeform). The `qualifierValue` must match the `<identifierValue>` in the corresponding TagExpression.
 
 ### Map Integration
 

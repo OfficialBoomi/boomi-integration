@@ -62,7 +62,7 @@ Components must be created in this order:
 
 1. **Create JSON Schema** - Define tool input structure
 2. **Create JSON Profile** - Import schema at build time
-3. **Create Connection** - Configure server name and API tokens
+3. **Create Connection** - Configure server name and API tokens (use `encrypted="true"` on token properties — see `components/mcp_server_connection_component.md`)
 4. **Create Operation** - Define tool (references profile)
 5. **Create Process** - MCP Start Shape (references connection + operation)
 6. **Deploy** - Push to on-premise runtime

@@ -94,6 +94,115 @@ boomi_api() {
   rm -f "$tmpfile"
 }
 
+# --- Branch helpers ---
+
+# Resolve a branch name or ID to a branch ID.
+# If input looks like a base64 branch ID (starts with Qjo), pass through.
+# Otherwise, query Branch API by name.
+resolve_branch_id() {
+  local input="$1"
+  [[ "$input" == Qjo* ]] && { echo "$input"; return 0; }
+
+  local url
+  url="$(build_api_url "Branch/query" false)"
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{\"QueryFilter\":{\"expression\":{\"operator\":\"EQUALS\",\"property\":\"name\",\"argument\":[\"${input}\"]}}}"
+
+  if [[ "$RESPONSE_CODE" != "200" ]]; then
+    echo "ERROR: Branch query failed (HTTP ${RESPONSE_CODE})" >&2
+    return 1
+  fi
+
+  local branch_id
+  branch_id=$(echo "$RESPONSE_BODY" | jq -r '.result[0].id // empty')
+  if [[ -z "$branch_id" ]]; then
+    echo "ERROR: Branch '${input}' not found" >&2
+    return 1
+  fi
+  echo "$branch_id"
+}
+
+# Resolve a branch ID to a human-readable branch name.
+# If input does NOT look like a base64 branch ID, pass through (already a name).
+resolve_branch_name() {
+  local input="$1"
+  [[ "$input" != Qjo* ]] && { echo "$input"; return 0; }
+
+  local url
+  url="$(build_api_url "Branch/query" false)"
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{\"QueryFilter\":{\"expression\":{\"operator\":\"EQUALS\",\"property\":\"id\",\"argument\":[\"${input}\"]}}}"
+
+  if [[ "$RESPONSE_CODE" != "200" ]]; then
+    echo "ERROR: Branch query failed (HTTP ${RESPONSE_CODE})" >&2
+    return 1
+  fi
+
+  local branch_name
+  branch_name=$(echo "$RESPONSE_BODY" | jq -r '.result[0].name // empty')
+  if [[ -z "$branch_name" ]]; then
+    echo "ERROR: Branch ID '${input}' not found" >&2
+    return 1
+  fi
+  echo "$branch_name"
+}
+
+# Read branchId attribute from a component XML file. Empty if not present.
+detect_xml_branch() {
+  local file="$1"
+  local match
+  match=$(grep -o 'branchId="[^"]*"' "$file" 2>/dev/null || true)
+  [[ -n "$match" ]] && echo "$match" | head -1 | sed 's/branchId="//;s/"//'
+  return 0
+}
+
+# Inject or replace branchId attribute in XML string.
+# Handles both <Component and <bns:Component (namespaced) element tags.
+inject_branch_id() {
+  local xml="$1"
+  local branch_id="$2"
+  if echo "$xml" | grep -q 'branchId="'; then
+    echo "$xml" | sed "s/branchId=\"[^\"]*\"/branchId=\"${branch_id}\"/"
+  else
+    echo "$xml" | sed "s/<\([a-zA-Z]*:\)\{0,1\}Component /<\1Component branchId=\"${branch_id}\" /"
+  fi
+}
+
+# Determine effective branch: --branch flag > XML branchId > BOOMI_DEFAULT_BRANCH_ID > empty (main)
+resolve_effective_branch() {
+  local flag_branch="$1"
+  local xml_branch="$2"
+
+  if [[ -n "$flag_branch" ]]; then
+    resolve_branch_id "$flag_branch"
+  elif [[ -n "$xml_branch" ]]; then
+    echo "$xml_branch"
+  elif [[ -n "${BOOMI_DEFAULT_BRANCH_ID:-}" ]]; then
+    echo "$BOOMI_DEFAULT_BRANCH_ID"
+  fi
+}
+
+# Read branchId from sync state. Empty if not present.
+read_sync_branch() {
+  local file_path="$1"
+  local sync_dir="$(pwd)/active-development/.sync-state"
+  local state_name
+  state_name="$(_sync_state_name "$file_path")"
+  local component_name
+  component_name="$(basename "$file_path" .xml)"
+
+  for sf in "${sync_dir}/${state_name}.json" "${sync_dir}/${component_name}.json"; do
+    if [[ -f "$sf" ]]; then
+      jq -r '.branch_id // empty' "$sf" 2>/dev/null
+      return 0
+    fi
+  done
+}
+
 # --- XML helpers ---
 
 # Extract an attribute value from an XML string or file
@@ -101,7 +210,7 @@ boomi_api() {
 #    or: echo "$xml" | xml_attr "componentId"
 xml_attr() {
   local attr="$1"
-  grep -o "${attr}=\"[^\"]*\"" | head -1 | sed "s/${attr}=\"//;s/\"//"
+  grep -o -m 1 "${attr}=\"[^\"]*\"" | sed "s/${attr}=\"//;s/\"//"
 }
 
 # Portable in-place sed (macOS vs GNU)
@@ -159,6 +268,7 @@ write_sync_state() {
   local component_id="$1"
   local file_path="$2"
   local content_hash="${3:-}"
+  local branch_id="${4:-}"
   local sync_dir="$(pwd)/active-development/.sync-state"
 
   mkdir -p "$sync_dir"
@@ -167,14 +277,9 @@ write_sync_state() {
   state_name="$(_sync_state_name "$file_path")"
   local state_file="${sync_dir}/${state_name}.json"
 
-  cat > "$state_file" <<EOF
-{
-  "component_id": "${component_id}",
-  "file_path": "${file_path}",
-  "content_hash": "${content_hash}",
-  "last_sync": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-EOF
+  local json="{\"component_id\":\"${component_id}\",\"file_path\":\"${file_path}\",\"content_hash\":\"${content_hash}\",\"last_sync\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+  [[ -n "$branch_id" ]] && json=$(echo "$json" | jq --arg b "$branch_id" '. + {branch_id: $b}')
+  echo "$json" | jq '.' > "$state_file"
   echo "Sync state: ${state_file}"
 }
 
@@ -260,7 +365,7 @@ get_origin_tag() {
 # Stamp origin tag into <bns:description> element of a local component XML file.
 # Modifies the file in-place so the stamp persists across pushes.
 # Handles: <bns:description>text</...>, <bns:description/>, <bns:description></...>
-# If no description element exists or already stamped, file is unchanged.
+# If no description element exists, injects one before <bns:object>.
 stamp_origin_file() {
   local file_path="$1"
   if [[ -z "$file_path" || ! -f "$file_path" ]]; then
@@ -290,6 +395,12 @@ stamp_origin_file() {
   # <bns:description></bns:description> → fill empty element
   if grep -q '<bns:description></bns:description>' "$file_path"; then
     sedi "s#<bns:description></bns:description>#<bns:description>${tag}</bns:description>#" "$file_path"
+    return
+  fi
+
+  # No description element — inject one before <bns:object>
+  if grep -q '<bns:object>' "$file_path"; then
+    sedi "s#<bns:object>#<bns:description>${tag}</bns:description><bns:object>#" "$file_path"
     return
   fi
 }

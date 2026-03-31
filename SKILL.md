@@ -10,7 +10,7 @@ This is the Boomi Process Development Framework - a reusable skill that enables 
 - **boomi-integration skill**: Reusable infrastructure, tools, documentation
 - **active-development/** (project root): All working files - components, sync state, feedback
 
-All tools use smart path resolution to automatically find the skill and component directories.
+**Running CLI tools**: The `scripts/` directory lives inside the skill, not the project workspace. When you see `bash scripts/boomi-*.sh` in documentation, resolve the path relative to the skill's location. Run from the project workspace directory so `.env` and `active-development/` are found correctly.
 
 ## Documentation Architecture
 
@@ -24,13 +24,19 @@ All tools use smart path resolution to automatically find the skill and componen
 - **Map transformations**: map_component.md + map_component_functions.md + source/target profile docs
 - **Event Streams**: event_streams_connection + operation + steps + platform_entities/event_streams.md
 - **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
+- **Disk V2 (File System)**: diskv2_connection_component + diskv2_connector_operation_component + diskv2_connector_step
 - **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
+- **Agent Step (AI Agent in process)**: agent_step.md
 - **Flow Services**: fss_operation_component + fss_start_step + flow_service_component + platform_entities/flow.md
 - **Debugging**: boomi_error_reference.md + relevant step/component docs
+- **Branch & Merge** (opt-in only): branch_merge_guide.md + cli_tool_reference.md branch workflows section
 
 ## First-Time User Detection
-**Check before starting any Boomi work**: Verify `.env` file exists in the workspace. If missing or you encounter dependency errors, this is a first-time user or new project workspace. Guide them through `references/guides/user_onboarding_guide.md` setup before proceeding.
+**Check before starting any Boomi work**: The `scripts/` directory is provided by this skill — ensure it is loaded before invoking CLI tools. Run `bash scripts/boomi-env-check.sh` to see which variables are SET vs UNSET (values are never exposed). Then run `bash scripts/boomi-folder-create.sh --test-connection` to verify platform access. If credentials are missing, guide the user through `references/guides/user_onboarding_guide.md` or `/bc-integration:env-setup-guide`.
+
+## Connection Discovery & Credential Security
+**Connection re-use is recommended.** Pulling existing connections keeps credentials out of the conversation. Offer the connection discovery workflow first, but respect the user's choice if they prefer to provide credentials directly. See `references/BOOMI_THINKING.md` § Connection Discovery for the full workflow.
 
 ## Workspace Organization & Knowledge Base
 ### Physical Directory Structure & Documentation Inventory
@@ -81,7 +87,9 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── boomi_patterns.md            # Step-by-step implementation recipes for common scenarios
 │   │   ├── boomi_error_reference.md     # Error patterns, silent failures, and troubleshooting
 │   │   ├── boomi_platform_reference.md  # Platform services catalog (DataHub, Flow, APIM, B2B/EDI) with scope boundaries
-│   │   └── api_endpoint_guide.md        # Sample developer friendly APIs for experimentation
+│   │   ├── api_endpoint_guide.md        # Sample developer friendly APIs for experimentation
+│   │   ├── branch_merge_guide.md        # Read when: user explicitly requests branch/merge workflows — branch lifecycle, merge requests, conflict resolution (opt-in, do not use unless directed)
+│   │   └── branch_merge_api_behavior.md # API-level branch semantics — last resort when CLI tools don't cover an edge case. Use branch_merge_guide.md if at all possible.
 │   │
 │   ├── components/              # Component XML reference documentation
 │   │   ├── process_component.md              # Use when: creating/editing process XML - defines shape positioning, dragpoint connections, and canvas structure
@@ -91,27 +99,32 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── edi_profile_component.md          # Use when: defining EDI document schemas, troubleshooting EDI parsing failures, understanding Boomi-specific EDI configuration
 │   │   ├── map_component.md                  # Use when: creating field-to-field transformations between profiles, understanding map generation rules and mapping patterns
 │   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, conditionals, math, lookups
-│   │   ├── rest_connection_component.md      # Use when: creating REST API connections - base URLs, authentication patterns, timeouts, connection pooling
+│   │   ├── rest_connection_component.md      # connectorType: "officialboomi-X3979C-rest-prod". Use when: creating REST API connections - base URLs, authentication patterns, timeouts, connection pooling
 │   │   ├── rest_connector_operation_component.md # Use when: defining REST operations - HTTP methods, resource paths, headers, query parameters, request/response profiles
-│   │   ├── databasev2_connection_component.md    # Use when: creating database connections - JDBC URLs, drivers, credentials, connection management
+│   │   ├── databasev2_connection_component.md    # connectorType: "officialboomi-X3979C-dbv2da-prod". Use when: creating database connections - JDBC URLs, drivers, credentials, connection management
 │   │   ├── databasev2_connector_operation_component.md # Use when: defining database operations - SQL queries, dynamic operations, GET/INSERT/UPDATE/DELETE, response profiles
-│   │   ├── event_streams_connection_component.md # Use when: creating Boomi Event Streams connections - environment tokens, cloud service authentication
+│   │   ├── event_streams_connection_component.md # connectorType: "officialboomi-X3979C-events-prod". Use when: creating Boomi Event Streams connections - environment tokens, cloud service authentication
 │   │   ├── event_streams_listen_operation_component.md # Use when: defining Listen operations for continuous event-driven or pub/sub processing (start shape subscribers)
 │   │   ├── event_streams_consume_operation_component.md # Use when: defining Consume operations for on-demand message batch retrieval (mid-process - not event triggered or pub/sub)
 │   │   ├── event_streams_produce_operation_component.md # Use when: defining Produce operations for publishing messages to Boomi Event Streams topics (pub/sub publishers)
-│   │   ├── salesforce_connection_component.md    # Use when: working with Salesforce connections (GUI-created only, but able to be used by this skill) - OAuth flows, session authentication
+│   │   ├── salesforce_connection_component.md    # connectorType: "salesforce". Use when: working with Salesforce connections (GUI-created only, but able to be used by this skill) - OAuth flows, session authentication
 │   │   ├── salesforce_connector_operation_component.md # Use when: working with existing Salesforce operations (GUI-imported) - filters, field selection, query options
-│   │   ├── boomi_for_sap_connection_component.md # Use when: creating SAP connections via Boomi for SAP Core - endpoint URLs, credentials, timeouts
+│   │   ├── boomi_for_sap_connection_component.md # connectorType: "invixoconsultinggroupas-OZI90V-boomia-prod". Use when: creating SAP connections via Boomi for SAP Core - endpoint URLs, credentials, timeouts
 │   │   ├── boomi_for_sap_connector_operation_component.md # Use when: defining SAP object queries with filters and field selection, working with Core-exposed services
 │   │   ├── custom_connector_connection_component.md # Use when: creating connections for custom SDK connectors - connector type format, GenericConnectionConfig structure
-│   │   ├── mft_connection_component.md         # Use when: creating MFT connections - Thru MFT partner connector credentials
+│   │   ├── diskv2_connection_component.md       # connectorType: "disk-sdk". Use when: creating Disk V2 connections - local/network file system access, directory configuration, cloud runtime restrictions
+│   │   ├── diskv2_connector_operation_component.md # Use when: defining Disk V2 operations - file CREATE/UPSERT/GET/QUERY/LIST/DELETE/LISTEN, filters, actionIfFileExists, directory overrides
+│   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology". Use when: creating MFT connections - Thru MFT partner connector credentials
 │   │   ├── mft_connector_operation_component.md # Use when: defining MFT operations - file pickup, drop-off, status updates
-│   │   ├── web_services_server_start_shape_operation.md # Use when: converting process to API, creating HTTP listener endpoints, defining request/response profiles for Boomi processes to be exposed as web services/ API end points
-│   │   ├── fss_operation_component.md    # Use when: creating Flow Services Server operations for Flow-callable Integration processes
+│   │   ├── web_services_server_start_shape_operation.md # connectorType: "wss". Use when: converting process to API, creating HTTP listener endpoints, defining request/response profiles for Boomi processes to be exposed as web services/ API end points
+│   │   ├── fss_operation_component.md    # connectorType: "fss". Use when: creating Flow Services Server operations for Flow-callable Integration processes
 │   │   ├── flow_service_component.md     # Use when: wrapping Integration processes as Flow-discoverable services, exposing actions to Boomi Flow
-│   │   ├── mcp_server_connection_component.md  # Use when: creating MCP Server connections - server naming, authentication, conversation starters
+│   │   ├── mcp_server_connection_component.md  # connectorType: "officialboomi-X3979C-mcp-prod". Use when: creating MCP Server connections - server naming, authentication, conversation starters
 │   │   ├── mcp_server_operation_component.md   # Use when: defining MCP tools - JSON schema for tool parameters, HTML encoding, dynamic operation fields
 │   │   ├── trading_partner_component.md       # Use when: creating B2B/EDI trading partner components - AS2 config, X12 ISA/GS control info, document types, tracked fields, acknowledgments
+│   │   ├── cross_reference_table_component.md # Use when: creating static lookup tables for value translation between systems, using cross reference lookups in maps or parameter values (Set Properties, Message, Notify)
+│   │   ├── process_property_component.md    # Use when: creating typed, reusable process property collections for environment-specific config, reading process property values in Set Properties or Groovy scripts
+│   │   ├── document_cache_component.md      # Use when: creating Document Cache components - defining indexes, keys, profile types for in-memory document caching
 │   │   └── process_extensions.md              # Use when: making connections, operations, or DPPs configurable per-environment via processOverrides and the Environment Extensions API
 │   │
 │   ├── steps/                   # Process step XML reference documentation
@@ -121,8 +134,10 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── salesforce_connector_step.md # Salesforce operations (requires GUI setup). Use when: querying/updating Salesforce objects, working with CRM data
 │   │   ├── boomi_for_sap_step.md    # Boomi for SAP operations. Use when: querying Core-exposed SAP objects with JSON responses, runtime parameter binding for SAP filters
 │   │   ├── custom_connector_step.md # Custom SDK connectors. Use when: using connectors built with Boomi's Java Connector SDK
+│   │   ├── diskv2_connector_step.md # Disk V2 file operations. Use when: reading, writing, querying, listing, or deleting files on local/network file systems
 │   │   ├── mft_connector_step.md    # MFT operations. Use when: picking up or dropping off files via Boomi MFT (Thru)
 │   │   ├── event_streams_steps.md   # Event Streams operations. Use when: pub/sub messaging, event-driven processing, async communication between processes
+│   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes
 │   │   ├── message_step.md      # Template engines for generating content. Use when: building payloads, creating test data, clearing documents
 │   │   ├── map_step.md          # Data transformation between profiles. Use when: transforming existing structured data between different schemas
 │   │   ├── set_properties_step.md # Variable creation (DDPs/DPPs). Use when: extracting values for later use, building dynamic paths, managing state, settings arbitrary variables
@@ -139,6 +154,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── fss_start_step.md    # Flow Services Server start step. Use when: creating process entry points for Flow-callable Integration processes
 │   │   ├── mcp_server_start_step.md  # MCP Server entry point. Use when: creating listener processes that expose tools to AI agents via MCP protocol
 │   │   ├── trading_partner_steps.md # B2B/EDI start and send shapes. Use when: building processes that receive from or send to trading partners via AS2, FTP, SFTP, etc.
+│   │   ├── document_cache_steps.md # Document Cache steps (Add, Retrieve, Remove). Use when: adding documents to cache, retrieving cached documents, removing from cache, using cache lookups as parameter sources
 │   │   └── shape_notes.md       # Canvas annotations visible in GUI. Use when: user explicitly requests adding documentation notes to process shapes
 │   │
 │   └── platform_entities/       # Platform service configuration and management
@@ -159,7 +175,8 @@ Default to the local `references/` content — it is curated and verified for th
     ├── boomi-execution-query.sh # Query execution records and download logs for any process type
     ├── boomi-profile-inspect.py # Extract field metadata from large profiles (Python stdlib only)
     ├── boomi-undeploy.sh        # Remove deployments from runtime environment
-    └── event-streams-setup.sh   # Create Event Streams topics and subscriptions
+    ├── event-streams-setup.sh   # Create Event Streams topics and subscriptions
+    └── boomi-branch.sh         # Branch and merge operations (list, create, delete, merge, status)
 ```
 
 **User Project Workspace** (separate for each project):
@@ -215,10 +232,11 @@ Boomi has several silent failure patterns that are critical to understand. These
 
 ### Component Lifecycle: Prefer Existing Over New
 **Decision Framework:**
-1. Check first: Look for existing components to update/reuse
-2. Update when possible: Use push/pull workflow for existing components
-3. Create only when necessary: New components only when genuinely needed
-4. Consolidate, don't duplicate: Enhance existing similar components
+1. **Connections**: Resolve via connection discovery workflow first (see § Connection Discovery above)
+2. **Other components**: Check for existing components to update/reuse before creating new ones
+3. Update when possible: Use push/pull workflow for existing components
+4. Create only when necessary: New components only when genuinely needed
+5. Consolidate, don't duplicate: Enhance existing similar components
 
 See `references/guides/cli_tool_reference.md` for workflow selection and command syntax.
 
@@ -251,19 +269,30 @@ Ten specialized tools handle development lifecycle. All tools are bash scripts (
 
 - `boomi-component-create.sh` - Create new component on platform (generates component ID)
   - Required: `file_path` (positional)
-  - Optional: `--test-connection`
+  - Optional: `--branch`, `--test-connection`
 
 - `boomi-component-push.sh` - Update existing component on platform
   - Required: `file_path` (positional)
-  - Optional: `--test-connection`
+  - Optional: `--branch`, `--test-connection`
 
 - `boomi-component-pull.sh` - Download component from platform to local
   - Required: `--component-id`
-  - Optional: `--target-path`
+  - Optional: `--branch`, `--target-path`
 
 - `boomi-deploy.sh` - Deploy process to runtime environment
   - Required: `file_path` (positional)
   - Optional: `--deployment-notes`, `--list-environments`
+  - Auto-detects branch from XML/sync state and warns before deploying branch components
+
+- `boomi-branch.sh` - Branch and merge operations (only for Branch & Merge enabled accounts)
+  - `list` — list all branches
+  - `create --name NAME --parent NAME` — create branch from parent
+  - `delete --branch NAME_OR_ID` — delete a branch
+  - `merge --source NAME --dest NAME [--strategy OVERRIDE|CONFLICT_RESOLVE]` — create merge request
+  - `merge-status --id ID` — check merge request status and component details
+  - `merge-execute --id ID` — execute a pending merge
+  - `merge-revert --id ID` — revert a completed merge (permanent)
+  - `merge-delete --id ID` — cancel a pending merge request
 
 - `boomi-undeploy.sh` - Remove deployments from a runtime environment
   - Modes: `<deploymentId>` (direct removal), `--by-component <file_path>` (lookup and remove via component file)
@@ -288,8 +317,7 @@ The CLI tools reside in the skill's `scripts/` directory (i.e. at the same level
 
 See `references/guides/cli_tool_reference.md` for workflows, error recovery, and usage patterns.
 
-**Credential Handling:**
-Component XML requires actual credential values, not environment variables. See `references/guides/cli_tool_reference.md` for patterns.
+Re-use existing connections (see § Connection Discovery above). Component XML requires actual credential values, not environment variables. See `references/guides/cli_tool_reference.md` for patterns.
 
 **Environment Variables:**
 Required for building and testing. Full setup in `references/guides/user_onboarding_guide.md`.
@@ -401,7 +429,7 @@ See `references/guides/boomi_error_reference.md` Issue #7 for folder placement v
 **Handling Blocked Dependencies:**
 When dependencies are unavailable (missing credentials, GUI-required components, API access pending), use placeholder pattern: Create named placeholder step → Add parallel test Message step with mock data → Route both to downstream logic → Replace placeholder when dependency available. Inform user of blocking issue.
 
-**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) may need GUI for initial setup. Net new Password-typed credentials are auto-encrypted by Boomi on push - pass plaintext values. Once created, preserve encrypted values exactly during pull/push. If components already exist on platform, proceed programmatically.
+**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) require GUI for initial setup. For all connections, follow the connection discovery workflow (see § Connection Discovery above) — re-use existing connections or have the user create new ones in the GUI. Once pulled, preserve encrypted values exactly during subsequent pull/push cycles.
 
 ### Step Addition Workflow
 **ALWAYS read `references/steps/[step_type].md` completely before writing XML.**

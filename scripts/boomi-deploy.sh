@@ -69,35 +69,92 @@ if [[ -z "$env_id" ]]; then
   exit 1
 fi
 
-# --- Deploy ---
-url="$(build_api_url "DeployedPackage")"
-package_name="Deploy_$(date +%s)"
+# --- Detect branch and warn ---
+xml_branch=$(detect_xml_branch "$FILE_PATH")
+sync_branch=$(read_sync_branch "$FILE_PATH" 2>/dev/null || true)
+effective_branch="${xml_branch:-${sync_branch:-}}"
+
+# --- Step 1: Package the component ---
+# Uses the two-step pattern: PackagedComponent → DeployedPackage
+# This ensures deterministic branch control (branchName on DeployedPackage is silently ignored).
 notes="${DEPLOY_NOTES:-Deployment at $(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+package_version="deploy-$(date +%s)"
 
-deploy_xml="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<ns0:DeployedPackage xmlns:ns0=\"http://api.platform.boomi.com/\">
-    <packageName>${package_name}</packageName>
-    <environmentId>${env_id}</environmentId>
-    <componentId>${component_id}</componentId>
-    <notes>${notes}</notes>
-</ns0:DeployedPackage>"
+# Resolve branch ID to human-readable name for PackagedComponent (which requires branchName, not branchId)
+branch_name=""
+if [[ -n "$effective_branch" ]]; then
+  branch_name=$(resolve_branch_name "$effective_branch") || {
+    echo "ERROR: Could not resolve branch name for '${effective_branch}'" >&2
+    exit 1
+  }
+  if [[ "$branch_name" != "main" ]]; then
+    echo "WARNING: This component is from a non-main branch (${branch_name})."
+    echo "Deploying will replace any existing deployment of this process in environment ${env_id}. If this is unexpected STOP and consult the user to discuss"
+  fi
+  echo "Packaging '${COMPONENT_NAME}' (${component_id}) from branch ${branch_name}"
+else
+  echo "Packaging '${COMPONENT_NAME}' (${component_id}) from main"
+fi
 
-echo "Deploying '${COMPONENT_NAME}' (${component_id}) to environment ${env_id}"
+# Build PackagedComponent JSON — include branchName only if non-main
+pkg_json=$(jq -cn \
+  --arg cid "$component_id" \
+  --arg ver "$package_version" \
+  --arg notes "$notes" \
+  --arg branch "$branch_name" \
+  'if $branch == "" then
+    {componentId: $cid, packageVersion: $ver, notes: $notes}
+  else
+    {componentId: $cid, packageVersion: $ver, notes: $notes, branchName: $branch}
+  end')
+
+pkg_url="$(build_api_url "PackagedComponent")"
+boomi_api -X POST "$pkg_url" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d "$pkg_json"
+
+if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
+  log_activity "deploy-package" "fail" "$RESPONSE_CODE" \
+    "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
+       --arg err "${RESPONSE_BODY:0:500}" \
+       '{component_name: $name, component_id: $id, error: $err}')"
+  echo "ERROR: Packaging failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
+  exit 0
+fi
+
+package_id=$(echo "$RESPONSE_BODY" | jq -r '.packageId // empty')
+if [[ -z "$package_id" ]]; then
+  echo "ERROR: No packageId in PackagedComponent response" >&2
+  exit 0
+fi
+
+echo "Packaged as ${package_id}"
+
+# --- Step 2: Deploy the package ---
+echo "Deploying to environment ${env_id}"
+
+deploy_url="$(build_api_url "DeployedPackage")"
+deploy_json=$(jq -cn \
+  --arg pid "$package_id" \
+  --arg eid "$env_id" \
+  --arg notes "$notes" \
+  '{packageId: $pid, environmentId: $eid, notes: $notes}')
 
 boomi_api --max-time "${BOOMI_DEPLOY_TIMEOUT:-120}" \
-  -X POST "$url" \
-  -H "Accept: application/xml" \
-  -H "Content-Type: application/xml" \
-  -d "$deploy_xml"
+  -X POST "$deploy_url" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d "$deploy_json"
 
 # Duplicate = prior attempt succeeded
 if [[ "$RESPONSE_CODE" == "400" ]] && echo "$RESPONSE_BODY" | grep -qi "duplicate"; then
   log_activity "deploy" "success" "$RESPONSE_CODE" \
     "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
-       --arg env "$env_id" --arg pkg "$package_name" \
-       '{component_name: $name, component_id: $id, environment_id: $env, package_name: $pkg, duplicate: true}')"
+       --arg env "$env_id" --arg pkg "$package_id" \
+       '{component_name: $name, component_id: $id, environment_id: $env, package_id: $pkg, duplicate: true}')"
   echo "Prior deployment succeeded (duplicate request detected)"
-  echo "SUCCESS: Package ${package_name}"
+  echo "SUCCESS: Package ${package_id}"
   exit 0
 fi
 
@@ -112,6 +169,6 @@ fi
 
 log_activity "deploy" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
-     --arg env "$env_id" --arg pkg "$package_name" \
-     '{component_name: $name, component_id: $id, environment_id: $env, package_name: $pkg}')"
-echo "SUCCESS: Deployed '${COMPONENT_NAME}' as package ${package_name}"
+     --arg env "$env_id" --arg pkg "$package_id" --arg branch "${branch_name:-main}" \
+     '{component_name: $name, component_id: $id, environment_id: $env, package_id: $pkg, branch: $branch}')"
+echo "SUCCESS: Deployed '${COMPONENT_NAME}' (package: ${package_id})"

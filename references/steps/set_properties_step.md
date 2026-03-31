@@ -87,6 +87,7 @@ Set Properties steps (shapetype="documentproperties") create or update Dynamic D
   ```xml
   <parametervalue key="1" valueType="current"/>
   ```
+- **definedparameter**: Read a value from a Process Property component. See `process_property_component.md` → "Referencing in Set Properties" for the `<definedprocessparameter>` element structure.
 
 ### Profile Element ID Mapping
 **CRITICAL:** When referencing profile elements, the `elementId` must match the `key` attribute from the profile XML, and `elementName` must follow the GUI display format.

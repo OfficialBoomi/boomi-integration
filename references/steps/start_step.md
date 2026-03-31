@@ -99,7 +99,10 @@ When using WSS, the process element typically includes:
 
 See `components/process_component.md` for the full decision table of recommended process options by start step type.
 
-### 4. Trading Partner Start Configuration
+### 4. Disk V2 LISTEN Start Configuration
+Disk V2 file-watching processes use a connector start shape with `actionType="LISTEN"` and `connectorType="disk-sdk"`. See `components/diskv2_connector_operation_component.md` - LISTEN Operation for the full operation config and start shape XML.
+
+### 5. Trading Partner Start Configuration
 B2B/EDI processes use a Trading Partner Start shape with `<tradingpartneraction actionType="Listen">`. See `steps/trading_partner_steps.md` for full reference.
 
 ## Common Patterns

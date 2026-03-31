@@ -53,7 +53,7 @@ query_tokens() {
       id name
       eventStreams {
         region
-        tokens { id name data allowConsume allowProduce expirationTime createdTime description }
+        tokens { id name allowConsume allowProduce expirationTime createdTime description }
       }
     }
   }' | jq .
@@ -67,7 +67,7 @@ create_token() {
 
   graphql 'mutation($input: EventStreamsTokenCreateInput!) {
     eventStreamsTokenCreate(input: $input) {
-      id name data allowConsume allowProduce expirationTime createdTime
+      id name allowConsume allowProduce expirationTime createdTime
     }
   }' "$vars" | jq .
 }

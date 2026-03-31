@@ -149,6 +149,9 @@ query_xml="<QueryConfig xmlns=\"http://api.platform.boomi.com/\" xmlns:xsi=\"htt
     <expression operator=\"and\" xsi:type=\"GroupingExpression\">${expressions}
     </expression>
   </QueryFilter>
+  <QuerySort>
+    <sortField fieldName=\"executionTime\" sortOrder=\"DESC\"/>
+  </QuerySort>
 </QueryConfig>"
 
 # --- Execute query ---

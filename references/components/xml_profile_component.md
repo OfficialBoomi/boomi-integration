@@ -30,7 +30,9 @@ Defines the structure and data types for XML documents flowing through a Boomi p
     <XMLProfile modelVersion="2" strict="true">
       <ProfileProperties>
         <XMLGeneralInfo/>
-        <XMLOptions encoding="utf8" implicitElementOrdering="true" parseRespectMaxOccurs="true"/>
+        <XMLOptions encoding="utf8" implicitElementOrdering="true" parseRespectMaxOccurs="true">
+          <XMLFlavor><CustomStandardFlavor/></XMLFlavor>
+        </XMLOptions>
       </ProfileProperties>
       <DataElements>
         <!-- Root element structure goes here -->
@@ -204,11 +206,13 @@ XMLProfile element ordering:
 
 | Attribute | Type | Required | Purpose |
 |-----------|------|----------|---------|
-| `identifierKey` | int | Yes | Key of the child element that holds the qualifier value |
-| `identifierName` | string | Yes | Name of that element (e.g., "Type") |
+| `identifierKey` | int | Yes | For `identifierType="value"`: key of the child element that holds the qualifier value. For `identifierType="occurrence"`: use `-1` (conventional; runtime ignores this value for occurrence expressions) |
+| `identifierName` | string | Yes | For value type: name of the qualifier element (e.g., `"Type"`). For occurrence type: `"occurrence"` |
 | `identifierType` | enum | No | `"value"` (match by qualifier value) or `"occurrence"` (match by position) |
 
-The `<identifierValue>` child element holds the qualifier string to match.
+The `<identifierValue>` child element holds:
+- For `identifierType="value"`: the qualifier string to match
+- For `identifierType="occurrence"`: a 1-based positional selector — `"1"` for first, `"2"` for second, `"-1"` for last. `"0"` is invalid and causes a silent map failure
 
 ### Map Integration
 
@@ -246,6 +250,9 @@ Often includes envelope/body wrapper:
 - Always include `useNamespace="-1"` unless using defined namespaces
 - The `strict="true"` setting enforces validation
 - Date formats use Java SimpleDateFormat patterns
+- Always include `<XMLFlavor><CustomStandardFlavor/></XMLFlavor>` inside `<XMLOptions>`. 
+  - GUI-created profiles contain an empty `<XMLFlavor/>` element that fails schema validation on PUT/POST (`cvc-complex-type.2.4.b`). Including the expanded form avoids this and is safe for all profiles. 
+  - Important: If you pull down an xml profile from the GUI you will likely need to modify that element before pushing the profile back into the platform.
 
 ## Large Profiles (WSDL/SOAP)
 XML profiles derived from WSDL schemas (Workday, SAP, etc.) can exceed 1MB and contain duplicate field names in different contexts (e.g., 60+ "First_Name" fields). For profiles >500KB, use `boomi-profile-inspect.py` to generate a searchable field inventory with full hierarchical paths for element ID disambiguation. The tool also supports EDI and Flat File profiles.

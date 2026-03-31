@@ -799,8 +799,8 @@ The XML ordering of `<TagList>` elements within `<tagLists>` has no effect on ru
 
 | Attribute | Type | Required | Purpose |
 |-----------|------|----------|---------|
-| `identifierKey` | int | Yes | Key of the data element that holds the qualifier value |
-| `identifierName` | string | Yes | Name of that element (e.g., "N101") |
+| `identifierKey` | int | Yes | For `identifierType="value"`: key of the data element that holds the qualifier value. For `identifierType="occurrence"`: use `-1` (conventional; runtime ignores this value for occurrence expressions) |
+| `identifierName` | string | Yes | For value type: name of the qualifier element (e.g., `"N101"`). For occurrence type: `"occurrence"` |
 | `identifierType` | enum | No | `"value"` (match by qualifier value) or `"occurrence"` (match by position) |
 
 #### identifierValue
@@ -820,19 +820,32 @@ This differs from `operator="or"`: multiple identifierValue returns only the fir
 
 #### Occurrence-Based Matching
 
-When `identifierType="occurrence"`, the `identifierValue` is a 1-based position number instead of a data value:
+When `identifierType="occurrence"`, the `identifierValue` is a 1-based position number instead of a data value — `"1"` for first, `"2"` for second, `"-1"` for last. `"0"` is invalid and causes a silent map failure. Can be used standalone or combined with a value TagExpression:
 
 ```xml
+<!-- Standalone: select first occurrence of the loop -->
 <TagList elementKey="20" listKey="1">
   <GroupingExpression operator="and">
-    <TagExpression identifierKey="22" identifierName="N101" identifierType="occurrence">
+    <TagExpression identifierKey="-1" identifierName="occurrence" identifierType="occurrence">
       <identifierValue>1</identifierValue>
+    </TagExpression>
+  </GroupingExpression>
+</TagList>
+
+<!-- Combined: select last N1 loop where N101="SF" -->
+<TagList elementKey="20" listKey="2">
+  <GroupingExpression operator="and">
+    <TagExpression identifierKey="22" identifierName="N101" identifierType="value">
+      <identifierValue>SF</identifierValue>
+    </TagExpression>
+    <TagExpression identifierKey="-1" identifierName="occurrence" identifierType="occurrence">
+      <identifierValue>-1</identifierValue>
     </TagExpression>
   </GroupingExpression>
 </TagList>
 ```
 
-This matches the 1st occurrence of the loop regardless of the element's data value. The `identifierKey` attribute is still required but is not used for data matching — only position matters. Use when loop order is fixed and guaranteed.
+The `identifierKey` attribute is still required for occurrence expressions but is not used for data matching — only position matters. Use when loop order is fixed and guaranteed.
 
 #### Compound Qualifiers
 

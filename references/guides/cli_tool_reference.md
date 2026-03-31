@@ -11,10 +11,11 @@
 
 Specialized bash tools handle different aspects of the development lifecycle. All tools require `curl` and `jq`, and source credentials directly from `.env` — no Python dependencies or virtual environments needed.
 
-**Folder Management**:
+**Environment & Setup**:
+- **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
 - **boomi-folder-create.sh**: Create new folders for project organization
 
-**Component Management**:
+**Component Management** (all support `--branch <name_or_id>` for Branch & Merge accounts):
 - **boomi-component-create.sh**: Create new components on platform (generates component IDs)
 - **boomi-component-push.sh**: Update existing components on platform
 - **boomi-component-pull.sh**: Download components from platform to local
@@ -24,6 +25,9 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-undeploy.sh**: Remove deployments by ID or by component file (`--by-component`)
 - **boomi-test-execute.sh**: Trigger process execution via API and return execution ID
 - **boomi-execution-query.sh**: Query execution records and download logs for any process type (including WSS listeners, manually executed processes, scheduled processes)
+
+**Branch & Merge** (only for accounts with Branch & Merge enabled):
+- **boomi-branch.sh**: Branch lifecycle and merge request operations (subcommand-based)
 
 **Profile Analysis**:
 - **boomi-profile-inspect.py**: Extract field metadata from large profiles (XML, EDI, Flat File) — Python stdlib only, no pip deps
@@ -75,6 +79,33 @@ bash scripts/boomi-execution-query.sh [--process-id <guid>] [--status STATUS] [-
 # Download logs for a specific execution
 bash scripts/boomi-execution-query.sh --execution-id <execution-id> --logs
 ```
+
+**Branch Workflows** (only when user has explicitly opted into Branch & Merge):
+```bash
+# Branch lifecycle
+bash scripts/boomi-branch.sh list
+bash scripts/boomi-branch.sh create --name feature-x --parent main
+bash scripts/boomi-branch.sh delete --branch feature-x
+
+# Component operations on a branch
+bash scripts/boomi-component-pull.sh --component-id <guid> --branch feature-x
+bash scripts/boomi-component-create.sh active-development/processes/new-process.xml --branch feature-x
+bash scripts/boomi-component-push.sh active-development/processes/my-process.xml  # branch is sticky from XML
+
+# Merge operations
+bash scripts/boomi-branch.sh merge --source feature-x --dest <target-branch>
+bash scripts/boomi-branch.sh merge-status --id <mergeRequestId>   # poll until stage=REVIEWING
+bash scripts/boomi-branch.sh merge-execute --id <mergeRequestId>  # execute the merge
+
+# Deploy warns automatically if component is from a non-main branch
+bash scripts/boomi-deploy.sh active-development/processes/my-process.xml
+```
+
+**Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main.
+
+**Safety:** Push aborts if sync state records a branch but the XML has no `branchId` (prevents accidental writes to main). Deploy warns when deploying from a non-main branch. All operations echo the target branch.
+
+See `references/guides/branch_merge_guide.md` for full Branch & Merge API reference.
 
 **Large Profile Analysis**:
 ```bash
@@ -172,24 +203,30 @@ Maps Boomi API component types to local folders. Used by `boomi-component-pull.s
 | `connector-action` | `active-development/operations/` | Connector operation definitions |
 | `documentcache` | `active-development/document-caches/` | Document cache definitions |
 | `script` | `active-development/scripts/` | Groovy/JavaScript scripts |
+| `processproperty` | `active-development/process-properties/` | Process Property components |
 
 ### Configuration System
 **Streamlined Configuration**:
 - All configuration is sourced directly from the `.env` file — no YAML config layer. Tools `source .env` natively in bash.
 
 ### Credential Management in Component XML
-Boomi components may contain various credential types: API keys, basic auth passwords, OAuth tokens, database credentials, etc.
 
-**Pulled Components**: If any field has `encrypted="true"` or `type="password"` with encrypted value, preserve the value exactly as-is. Never modify encrypted values.
+**Connection Re-use (Recommended):** Before creating a new connection, consider the discovery workflow: check `preferred_connections.md` → ask user if they have a link or component ID → pull existing connection. This keeps credentials out of the conversation entirely. If no existing connection fits, the user can create one in the Boomi GUI, or provide credentials directly for the agent to create one.
 
-**New Components**: Read credentials from `.env` and use actual plain text values. Inform user to encrypt via GUI for production. If `.env` lacks needed credentials, use demo values and inform the user.
+**Preferred pattern — pull from platform**: The user shares a component URL or ID, you pull it down, and use the pre-encrypted credential values as-is.
 
-**Best Practice**: It is generally preferable for users to pre-configure their sensitive keys within the platform, and we would simply reference them pre-encrypted via component pull. Most keys in .env would be demo or test. All the same - *important* do not recite any keys or sensitive data from .env in any plan or overview that you're presenting to the user, because in a demo or screen-sharing situation those could be inadvertently revealed to others.
+**User-provided credentials**: If the user provides a credential value directly (e.g., "here's the API key, build this"), use it in component XML. If it appears to be a production secret, remind them of the pull-from-platform option — but respect their choice.
 
-**Never**: Attempt to encrypt values programmatically - this will produce broken credentials.
+**Pulled components — encryption behavior**:
+- If any field has `encrypted="true"` or `type="password"` with encrypted value, preserve the value exactly as-is
+- Encrypted hex values may change across pull cycles due to platform-side re-encryption — this is expected, not corruption
+- Some connectors (e.g., MCP Server) use `encrypted="true"` on `<properties>` elements within `customproperties` fields instead of `type="password"` — see the relevant connection component reference
+- Do not attempt to encrypt or re-encrypt values programmatically — this will produce broken credentials
 
-**Reference Context Quick Guide - Variable Substitution Support**:
+**Process property passwords**: Prefer leaving `defaultValue` empty for `type="password"` fields and supplying real values via Environment Extensions. If a pulled component has a non-empty password `defaultValue`, let the user know — they may want to migrate to Environment Extensions.
+
+**Avoid reciting credentials** in plans, summaries, or overviews — they could be visible during screen sharing. The user can always ask you to surface them if needed.
+
+**Variable substitution**:
 - `{ComponentName}` → **Local XML ONLY** (resolved by agent orchestration during creation)
-- **Actual credential values** → **XML components REQUIRED** (no substitution - sent as-is to platform)
-
-**Critical Distinction**: CLI tools perform NO variable substitution on XML component files. Use real values.
+- CLI tools perform NO variable substitution on XML component files

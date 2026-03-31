@@ -11,6 +11,7 @@ This guide covers Boomi's core mental models and development philosophy.
 - Datetime Field Pipeline
 - Connector Architecture & Behavior
 - Step Design Principles
+- Document Cache (When and Why)
 - Architectural Patterns
 - Critical Silent Failures Awareness
 - Naming Conventions
@@ -155,11 +156,23 @@ When uncertain, default to technology connectors (REST, Database) over branded o
 - **Technology Connectors (REST, Database, Event Streams)**: Fully programmatic - connections, operations, all configuration via XML
 - **Branded Connectors (Salesforce, NetSuite, Boomi for SAP)**: Require GUI configurations by the user for OAuth flows, metadata import, live discovery, or Core module setup. Reference existing components by ID, or use placeholder pattern when components don't exist yet, or create net new functionality as technology connectors.
 - **MCP Server Connector**: Listener-based connector that exposes Boomi processes as AI-callable tools via Model Context Protocol. Uses Connection (server identity + auth) + Operation (tool definition with JSON schema) + Start Step (listener entry point). Unlike request-based connectors, MCP processes are always listener processes that wait for AI agent invocations. Technology Preview - not production-ready.
+- **Agent Connector** (`connectorType="boomiai"`): Integrates AI agents from Agent Control Tower into processes. Connection + Operation require one-time GUI setup (Component API does not support creating these), but once created they are reusable across any number of programmatically-built processes by ID. Requires a Message step before it to construct the prompt. Output is an SSE event stream; downstream parsing needed to extract the agent's text response.
 
-**Security Notes:**
-- Connection password fields (`type="password"`) are auto-encrypted by Boomi when pushed via API - when creating a new connection with a password: pass plaintext, leave `<bns:encryptedValues/>` empty
-- It is often a best practice to configure connection credentials in the GUI and then have the agent simply use them without visibility into the credentials themselves
-- The agent can also use credentials in the local .env file
+**Connection Discovery (recommended before building):**
+
+Re-using existing connections avoids credential exposure in the context window. Offer this workflow first, but respect the user's preference if they want to take a different approach:
+
+1. **Check `preferred_connections.md`** in the project workspace — match entries by description to needed connector types, confirm with user
+2. **Ask the user** to create or provide a link or component ID for an existing connection — user pastes Boomi GUI link, agent extracts componentId and pulls.
+3. User provides credentials directly for the agent to create a new connection (this is not a recommended best practice)
+4. After resolving, offer to add newly discovered connections to `preferred_connections.md`
+
+**Credential philosophy:**
+- **Prefer pulling from platform**: Credentials configured in the Boomi GUI come down pre-encrypted — this keeps secrets out of the conversation entirely
+- **User-provided credentials are OK**: If a user shares a credential directly, use it. If it appears to be a production secret, remind them of the pull-from-platform option — but respect their choice
+- **Avoid reciting credentials** in plans, summaries, or overviews — they could be visible during screen sharing. The user can always ask you to surface them if needed
+
+See `cli_tool_reference.md` § Credential Management for encryption behavior and password field handling.
 
 
 ### REST Connector Specifics
@@ -267,6 +280,18 @@ Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring 
 
 **Critical:** Use Return Documents OR Stop at path end, never both.
 
+## Document Cache (When and Why)
+
+The document cache is a way to store documents retrieved during a process so they can be used later. Many use it to correlate different types of data to one another or to pull a value from another document based on the value in the current document. Documents are kept only during the process execution (in memory) and do not carry over into later executions.
+
+**Use a document cache when:**
+- Building cross-reference lookups within a process execution (e.g., cache customer records, look up by ID while processing orders)
+- Caching destination system records for existence checks before insert/update — avoids per-record API calls
+- Accumulating documents across processing steps for aggregated retrieval
+- Joining data from multiple sources via map cache joins or Retrieve From Cache steps
+
+See `references/components/document_cache_component.md` and `references/steps/document_cache_steps.md` for component structure and step configuration.
+
 ## Architectural Patterns
 ### Wrapper + Subprocess Separation of Concerns
 **Key Principle**: Separate API listener mechanics from business logic for testability.
@@ -294,7 +319,7 @@ Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring 
 
 **Why this matters**: Boomi processes are opaque at runtime. Notify steps provide visibility into document content, property values, and execution flow at critical points.
 
-**Essential concept**: Place Notify steps strategically (after Message steps, before/after connector calls, after Set Properties, always on Catch paths) to validate behavior and payloads during development.
+**Essential concept**: Place Notify steps strategically (after Message steps, before/after connector calls, after Set Properties, always on Catch paths) to validate behavior and payloads during development. After or before notable process points, use `valueType="current"` to log the raw document for visibility.
 
 ## Critical Silent Failures Awareness
 Key patterns that fail silently without errors:

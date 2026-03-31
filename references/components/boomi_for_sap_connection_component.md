@@ -1,5 +1,5 @@
 ## Component Type
-**Type**: `connector-settings`  
+**Type**: `connector-settings`
 **SubType**: `invixoconsultinggroupas-OZI90V-boomia-prod`
 
 ## Overview
