@@ -13,7 +13,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 
 **Environment & Setup**:
 - **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
-- **boomi-folder-create.sh**: Create new folders for project organization
+- **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent.
 
 **Component Management** (all support `--branch <name_or_id>` for Branch & Merge accounts):
 - **boomi-component-create.sh**: Create new components on platform (generates component IDs)

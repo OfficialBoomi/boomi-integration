@@ -147,14 +147,52 @@ System-generated unique 19-digit integer. Self-closing — no child element.
 ```
 
 ### date
-Date/time value with format mask.
+Date/time value with format mask. The `dateparametertype` attribute controls which date is used.
+
+**Current date/time** — snapshot at execution time:
 ```xml
 <parametervalue key="1" valueType="date">
   <dateparameter dateparametertype="current" datetimemask="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"/>
 </parametervalue>
 ```
 
-The `dateparametertype` attribute controls which date is used. Additional options include relative date, last run date, and last successful run date.
+**Relative date** — offset from current date/time:
+```xml
+<parametervalue key="1" valueType="date">
+  <dateparameter dateparametertype="relative" datetimemask="MMddyyyy">
+    <datedelta sign="minus" unit="days" value="1"/>
+  </dateparameter>
+</parametervalue>
+```
+
+| `datedelta` Attribute | Purpose | Values |
+|---|---|---|
+| `sign` | Direction of offset | `plus`, `minus` |
+| `unit` | Time unit | `years`, `months`, `days`, `hours`, `minutes`, `seconds` |
+| `value` | Amount to offset | Integer as string (e.g. `"1"`, `"30"`) |
+
+**Last run date** — timestamp of the previous process execution (regardless of success/failure):
+```xml
+<parametervalue key="1" valueType="date">
+  <dateparameter dateparametertype="last" datetimemask="MMddyyyy"/>
+</parametervalue>
+```
+
+**Last successful run date** — timestamp of the most recent error-free execution:
+```xml
+<parametervalue key="1" valueType="date">
+  <dateparameter dateparametertype="lastsuccessful" datetimemask="MMddyyyy"/>
+</parametervalue>
+```
+
+| `dateparametertype` | Description |
+|---|---|
+| `current` | Current date/time at execution |
+| `relative` | Current date/time offset by `datedelta` |
+| `last` | Date/time of last process execution |
+| `lastsuccessful` | Date/time of last error-free execution |
+
+`last` and `lastsuccessful` require `updateRunDates="true"` on the `<process>` element. On first-ever execution (no prior run history), both return the Unix epoch (`1970-01-01T00:00:00`) — not empty string. Processes should treat epoch as the "no prior execution" sentinel.
 
 ### keygen
 Auto-incrementing sequential counter. Counter values are stored per-Runtime and can be viewed/reset in Manage > Runtime Management > Counters.
@@ -251,7 +289,8 @@ Inline connector call — executes a connector operation and returns a single fi
                       operationId="[operationGuid]" outputParamId="[elementId]" 
                       outputParamName="[elementName (path)]">
     <inputs>
-      <parametervalue key="0" valueType="[type]">
+      <parametervalue elementToSetId="[filterId]" elementToSetName="[filterName]" 
+                      key="0" usesEncryption="false" valueType="[type]">
         <!-- input value (profile, static, track, etc.) -->
       </parametervalue>
     </inputs>
@@ -261,15 +300,15 @@ Inline connector call — executes a connector operation and returns a single fi
 
 | Attribute | Purpose |
 |---|---|
-| `actionType` | Operation action (CREATE, GET, QUERY, etc.) |
+| `actionType` | Operation action (CREATE, GET, QUERY, LIST, etc.) |
 | `connectionId` | GUID of the connection component |
 | `connectorType` | Connector technology identifier (e.g. `disk-sdk`, `http`, `salesforce`) |
-| `enforceSingleResult` | When `true`, expects exactly one result document |
+| `enforceSingleResult` | When `true`, expects exactly one result document. Returns empty string on zero results (no error) |
 | `operationId` | GUID of the operation component |
 | `outputParamId` | Profile element ID of the field to return from the response |
 | `outputParamName` | Display name with path (e.g. `"fileName (File/Object/fileName)"`) |
 
-The `inputs` block accepts any standard parameter value type to provide values for the operation's input filters.
+The `inputs` block accepts any standard parameter value type to provide values for the operation's input filters. Each input `parametervalue` requires `elementToSetId` (the filter's numeric ID from the operation) and `elementToSetName` (the filter's display name, e.g. `"fileName:EQUALS"`).
 
 ### crossref
 Cross Reference Table lookup. Returns a single column value given one or more input column values. See `cross_reference_table_component.md` → "Cross Reference Lookup as Parameter Value Source" for full structure, attribute tables, and multi-input examples.
@@ -277,7 +316,7 @@ Cross Reference Table lookup. Returns a single column value given one or more in
 <parametervalue key="1" valueType="crossref">
   <crossrefparameter crossRefTableId="[componentGuid]" outputParamId="[colIndex]" outputParamName="[Column Name]">
     <inputs>
-      <parametervalue elementToSetId="[colIndex]" elementToSetName="[Column Name]" key="0" valueType="[type]">
+      <parametervalue elementToSetId="[colIndex]" elementToSetName="[Column Name]" key="0" usesEncryption="false" valueType="[type]">
         <!-- input value -->
       </parametervalue>
     </inputs>
@@ -303,7 +342,7 @@ Document Cache lookup. Retrieves a single profile element from a cached document
 ```
 
 ### sql
-Execute a SQL statement against a database connection and return a value from the result.
+Execute a SQL statement against a database connection and return a value from the result. **Requires a legacy database connection** — does not work with newer database connector types.
 ```xml
 <parametervalue key="1" valueType="sql">
   <sqlparameter cachevalues="false" connection="[connectionGuid]" outputdatatype="1" outputpos="1">
@@ -323,7 +362,7 @@ Execute a SQL statement against a database connection and return a value from th
 The `<parameters>` element can contain `parametervalue` entries for parameterized queries.
 
 ### sp
-Execute a stored procedure against a database connection and return a value from the result. Structure mirrors `sql` type.
+Execute a stored procedure against a database connection and return a value from the result. **Requires a legacy database connection** — does not work with newer database connector types. Structure mirrors `sql` type.
 ```xml
 <parametervalue key="1" valueType="sp">
   <spparameter cachevalues="false" connection="[connectionGuid]" outputdatatype="1" outputpos="1" 
@@ -333,7 +372,7 @@ Execute a stored procedure against a database connection and return a value from
 </parametervalue>
 ```
 
-The `sqltoexecute` attribute contains the stored procedure name. Attributes and `<parameters>` behavior match the `sql` type.
+The `sqltoexecute` attribute contains the stored procedure name (not a full SQL statement). The `<parameters>` element holds input parameters passed to the procedure in positional order. Attributes and behavior match the `sql` type. If the procedure doesn't exist in the database, the error is `Could not find stored procedure '[name]'`.
 
 ---
 

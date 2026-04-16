@@ -38,15 +38,27 @@ fi
 # --- Create folder ---
 url="$(build_api_url "Folder")"
 
-body=$(jq -n \
-  --arg name "$FOLDER_NAME" \
-  --arg parent "$PARENT_ID" \
-  '{name: $name, parentId: $parent}')
+if [[ -n "$PARENT_ID" ]]; then
+  body=$(jq -n --arg name "$FOLDER_NAME" --arg parent "$PARENT_ID" '{name: $name, parentId: $parent}')
+else
+  body=$(jq -n --arg name "$FOLDER_NAME" '{name: $name}')
+fi
 
 boomi_api -X POST "$url" \
   -H "Accept: application/json" \
   -H "Content-Type: application/json" \
   -d "$body"
+
+# If creation failed with a parentId, retry in account root
+if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" && -n "$PARENT_ID" ]]; then
+  echo "WARN: Folder creation failed with parent '${PARENT_ID}' (HTTP ${RESPONSE_CODE}). Retrying in account root..." >&2
+  PARENT_ID=""
+  body=$(jq -n --arg name "$FOLDER_NAME" '{name: $name}')
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "$body"
+fi
 
 if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
   log_activity "folder-create" "fail" "$RESPONSE_CODE" \

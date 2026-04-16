@@ -47,7 +47,7 @@ require_tools() {
 
 # --- Constants ---
 
-BOOMI_USER_AGENT="Boomi Companion"
+BOOMI_USER_AGENT="boomi-companion/$(cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo unknown)"
 
 # --- API helpers ---
 
@@ -300,9 +300,7 @@ _activity_log_dir() {
 }
 
 _plugin_version() {
-  local plugin_json
-  plugin_json="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd ../../../ && pwd)/.claude-plugin/plugin.json"
-  jq -r '.version // "unknown"' "$plugin_json" 2>/dev/null || echo "unknown"
+  cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown"
 }
 
 log_activity() {
@@ -355,16 +353,9 @@ log_activity() {
 # --- Origin stamp ---
 
 get_origin_tag() {
-  local plugin_json
-  plugin_json="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd ../../../ && pwd)/.claude-plugin/plugin.json"
-  if [[ -f "$plugin_json" ]]; then
-    local name version
-    name=$(jq -r '.name // "bc-integration"' "$plugin_json" 2>/dev/null || echo "bc-integration")
-    version=$(jq -r '.version // "?"' "$plugin_json" 2>/dev/null || echo "?")
-    echo "built with ${name} plugin v${version}"
-  else
-    echo "built with boomi-integration agent skill"
-  fi
+  local v
+  v=$(cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown")
+  echo "built with boomi-companion v${v}"
 }
 
 # Stamp origin tag into <bns:description> element of a local component XML file.
