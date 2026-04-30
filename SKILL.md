@@ -170,7 +170,8 @@ Default to the local `references/` content — it is curated and verified for th
 │       ├── event_streams.md     # Topics, subscriptions, and GraphQL entity management
 │       ├── boomi_for_sap.md     # Boomi for SAP architecture, scope boundaries, JSON-formatted SAP integration via Core module
 │       ├── flow.md              # Boomi Flow integration: FSS deployment workflow, Flow Service components, multi-platform development (build Integration first, then Flow)
-│       └── mcp_server.md          # MCP Server architecture, URL patterns, client configuration, known limitations (Technology Preview)
+│       ├── mcp_server.md          # MCP Server architecture, URL patterns, client configuration, known limitations (Technology Preview)
+│       └── shared_web_server.md   # Shared web server: API tiers, per-port auth types, .env-driven WSS testing model, and SharedServerInformation API limits
 │
 └── scripts/                       # CLI tools — invoke as <skill-path>/scripts/<tool>.sh
     ├── boomi-common.sh          # Shared utilities sourced by all tools
@@ -327,6 +328,7 @@ Eleven specialized tools handle development lifecycle. All tools are bash script
 - `boomi-wss-test.sh` - Test WSS listener endpoints via the shared web server
   - Required: `--path` (e.g., `/ws/simple/createOrder`)
   - Optional: `--method` (default POST), `--data` (inline JSON or file path), `--content-type` (default `application/json`)
+  - Auth is driven entirely by `.env`: `SERVER_AUTH_TYPE` declares the scheme (`basic | bearer | none`), and the script reads the matching credential vars. Unset `SERVER_AUTH_TYPE` falls back to inference with hard-fail on ambiguity. See `references/platform_entities/shared_web_server.md` for the full model.
 
 - `boomi-execution-query.sh` - Query execution records and download logs for any process type
   - Optional: `--process-id`, `--status`, `--since`, `--limit` (default 3)
@@ -349,7 +351,7 @@ Re-use existing connections (see § Connection Discovery above). Component XML r
 **Environment Variables:**
 Required for building and testing. Full setup in `references/guides/user_onboarding_guide.md`.
 - Platform API: `BOOMI_API_URL`, `BOOMI_USERNAME`, `BOOMI_API_TOKEN`, `BOOMI_ACCOUNT_ID`, `BOOMI_ENVIRONMENT_ID`, `BOOMI_TEST_ATOM_ID`, `BOOMI_VERIFY_SSL`, `BOOMI_TARGET_FOLDER`
-- Shared Web Server: `SERVER_BASE_URL`, `SERVER_USERNAME`, `SERVER_TOKEN`, `SERVER_VERIFY_SSL` - used for WSS testing and **FSS connectivity** (see `references/guides/process_testing_guide.md`, `references/platform_entities/flow.md`)
+- Shared Web Server: `SERVER_BASE_URL`, `SERVER_AUTH_TYPE` (`basic | bearer | none`; unset = infer), `SERVER_USERNAME` + `SERVER_TOKEN` (Basic), `SERVER_BEARER_TOKEN` (Bearer), `SERVER_VERIFY_SSL` — used for WSS testing and **FSS connectivity** (see `references/guides/process_testing_guide.md`, `references/platform_entities/flow.md`). Boomi public cloud runtimes only support Basic; local runtimes can use other auth modes — see `references/platform_entities/shared_web_server.md` before assuming Basic is required.
 
 ## Development Patterns
 

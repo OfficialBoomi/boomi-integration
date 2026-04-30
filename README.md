@@ -8,7 +8,7 @@ This project is licensed under the [BSD-2-Clause License](LICENSE). If you fork 
 
 ## Feedback & Issues
 
-Found a bug or have a feature idea? Email solutions@boomi.com with a clear description, steps to reproduce, and any relevant error messages.
+Found a bug or have a feature idea? Email developer-offerings@boomi.com with a clear description, steps to reproduce, and any relevant error messages.
 
 ## What is this?
 
@@ -82,10 +82,14 @@ BOOMI_TARGET_FOLDER=your_default_folder_guid
 BOOMI_ENVIRONMENT_ID=your_environment_id
 BOOMI_TEST_ATOM_ID=your_test_atom_id
 
-# Shared Web Server Runtime Credentials (lets the agent test listeners - optional)
+# Shared Web Server Credentials
+# SERVER_AUTH_TYPE: basic | bearer | none.
+# See references/platform_entities/shared_web_server.md for runtime-by-runtime guidance.
 SERVER_BASE_URL=https://your-atom.integrate.boomi.com
+SERVER_AUTH_TYPE=basic
 SERVER_USERNAME=your_runtime_username
 SERVER_TOKEN=your_runtime_token
+SERVER_BEARER_TOKEN=
 SERVER_VERIFY_SSL=false
 ```
 
@@ -176,5 +180,5 @@ and here: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/over
 If you encounter issues:
 
 1. This course provides an excellent intro to Claude Code: https://anthropic.skilljar.com/claude-code-in-action
-2. We would love your feedback and input via solutions@boomi.com
+2. We would love your feedback and input via developer-offerings@boomi.com
 3. Your AI agent can often help troubleshoot and explain issues

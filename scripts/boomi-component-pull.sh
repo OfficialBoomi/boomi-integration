@@ -51,7 +51,7 @@ fi
 
 tmpfile=$(mktemp)
 trap 'rm -f "$tmpfile"' EXIT
-RESPONSE_CODE=$(boomi_curl -o "$tmpfile" -w "%{http_code}" -X GET "$url" -H "Accept: application/xml")
+boomi_api --out-file "$tmpfile" -X GET "$url" -H "Accept: application/xml"
 
 if [[ "$RESPONSE_CODE" != "200" ]]; then
   log_activity "component-pull" "fail" "$RESPONSE_CODE" \

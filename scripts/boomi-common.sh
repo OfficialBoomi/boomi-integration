@@ -45,9 +45,15 @@ require_tools() {
   fi
 }
 
+# --- Version ---
+
+_skill_version() {
+  cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown"
+}
+
 # --- Constants ---
 
-BOOMI_USER_AGENT="boomi-companion/$(cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo unknown)"
+BOOMI_USER_AGENT="boomi-companion/$(_skill_version)"
 
 # --- API helpers ---
 
@@ -88,15 +94,24 @@ boomi_curl() {
 
 # High-level API call: captures body and http code cleanly via temp file.
 # Sets global RESPONSE_BODY and RESPONSE_CODE after each call.
-# Usage: boomi_api [curl args...]
+# Usage: boomi_api [--out-file <path>] [curl args...]
+# When --out-file is given, the response is written to <path> (caller owns it)
+# and RESPONSE_BODY is left empty.
 RESPONSE_BODY=""
 RESPONSE_CODE=""
 boomi_api() {
-  local tmpfile
-  tmpfile=$(mktemp)
+  local out_file=""
+  if [[ "${1:-}" == "--out-file" ]]; then
+    out_file="$2"; shift 2
+  fi
+  local tmpfile="${out_file:-$(mktemp)}"
   RESPONSE_CODE=$(boomi_curl -o "$tmpfile" -w "%{http_code}" "$@")
-  RESPONSE_BODY=$(cat "$tmpfile")
-  rm -f "$tmpfile"
+  if [[ -z "$out_file" ]]; then
+    RESPONSE_BODY=$(cat "$tmpfile")
+    rm -f "$tmpfile"
+  else
+    RESPONSE_BODY=""
+  fi
 }
 
 # --- Branch helpers ---
@@ -299,11 +314,10 @@ _activity_log_dir() {
   echo "$(pwd)/.activity-log"
 }
 
-_plugin_version() {
-  cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown"
-}
-
+# Opt-in via BOOMI_COMPANION_LOG_ACTIVITY=1 in .env. Default is off.
 log_activity() {
+  [[ "${BOOMI_COMPANION_LOG_ACTIVITY:-0}" == "1" ]] || return 0
+
   local operation="$1"
   local result="$2"
   local http_code="${3:-}"
@@ -322,7 +336,7 @@ log_activity() {
 
     jq -cn \
       --arg ts "$timestamp" \
-      --arg ver "$(_plugin_version)" \
+      --arg ver "$(_skill_version)" \
       --arg ws "$(basename "$(pwd)")" \
       --arg op "$operation" \
       --arg script "$script_name" \
@@ -335,7 +349,7 @@ log_activity() {
       --argjson details "$details" \
       '{
         timestamp: $ts,
-        plugin_version: $ver,
+        skill_version: $ver,
         workspace: $ws,
         operation: $op,
         script: $script,

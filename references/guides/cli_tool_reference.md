@@ -5,6 +5,7 @@
 - Error Recovery Strategies
 - Component Type to Folder Mapping
 - Configuration System
+- Activity Logging
 - Credential Management in Component XML
 
 ### CLI Tools
@@ -14,7 +15,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 **Environment & Setup**:
 - **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
 - **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent.
-- **boomi-shared-server-info.sh**: Fetch atom `apiType`, `url`, and `minAuth` from `SharedServerInformation`. Run before authoring any WSS listener or API Service Component to route by API tier (`basic`/`intermediate` → bare WSS; `advanced` → API Service Component). Takes an atom ID as arg; defaults to `$BOOMI_TEST_ATOM_ID`. Exits non-zero on lookup failure.
+- **boomi-shared-server-info.sh**: Fetch atom `apiType`, default-port `url`, default-port `auth` (when reportable), and atom-wide `minAuth` floor from `SharedServerInformation`. Run before authoring any WSS listener or API Service Component to route by API tier (`basic`/`intermediate` → bare WSS; `advanced` → API Service Component). Takes an atom ID as arg; defaults to `$BOOMI_TEST_ATOM_ID`. Exits non-zero on lookup failure. Output is supplementary — see `references/platform_entities/shared_web_server.md` for what the API can and can't tell you about a multi-port atom.
 
 **Component Management** (all support `--branch <name_or_id>` for Branch & Merge accounts):
 - **boomi-component-create.sh**: Create new components on platform (generates component IDs)
@@ -259,6 +260,10 @@ Maps Boomi API component types to local folders. Used by `boomi-component-pull.s
 ### Configuration System
 **Streamlined Configuration**:
 - All configuration is sourced directly from the `.env` file — no YAML config layer. Tools `source .env` natively in bash.
+
+### Activity Logging
+
+Opt-in JSONL log of script-level operations (component pulls, pushes, deployments, etc.). Disabled by default — set `BOOMI_COMPANION_LOG_ACTIVITY=1` in `.env` to enable. Records are appended to `.activity-log/activity.jsonl` (gitignored) in the workspace and are written locally only — never transmitted off-machine. Each record contains timestamp, skill version, workspace, operation, script, OS user, Boomi user, account ID, environment ID (when set), result, HTTP code, and operation-specific details.
 
 ### Credential Management in Component XML
 

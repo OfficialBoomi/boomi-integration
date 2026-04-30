@@ -10,6 +10,7 @@
 - URL Path Examples
 - Dependencies
 - Common Patterns
+- Inbound Query Parameters
 - Important Notes
 - Testing Considerations
 
@@ -217,6 +218,22 @@ Path: `/ws/simple/createProcessorder`
   outputType="none"/>
 ```
 Path: `/ws/simple/executeEvent`
+
+## Inbound Query Parameters
+
+Each `?key=value` pair on the request URL populates a Dynamic Process Property named `query_<key>`. URL-encoded values arrive decoded. Dots and dashes in keys are preserved verbatim in the DPP name (`?my-key=x` → DPP `query_my-key`).
+
+Read with `valueType="process"` and `<processparameter>`:
+
+```xml
+<parametervalue key="1" valueType="process">
+  <processparameter processproperty="query_id" processpropertydefaultvalue=""/>
+</parametervalue>
+```
+
+### Anti-pattern: tracked reads of DPPs return empty silently
+
+Reading a DPP via `valueType="track"` with `<trackparameter>` — using either `propertyId="process.<name>"` or `propertyId="mime.<name>"` — pushes, deploys, and runs without error, but every read returns empty string. This is the most common silent-failure trap on inbound WSS query parameters: a developer expecting `mime.id` to work for `?id=...` finds the value missing with no diagnostic. Always use `valueType="process"` + `<processparameter>` for DPPs. See `references/guides/boomi_error_reference.md` Issue #24 for the underlying mechanism.
 
 ## Important Notes
 1. **HTTP Method**: Automatically determined - cannot be explicitly set

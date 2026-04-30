@@ -1279,22 +1279,51 @@ Multiple deployed processes on the same WSS path cause unpredictable routing. Re
 
 ### Diagnostic
 
-Query active listeners using ListenerStatus API:
+`ListenerStatus` is the authoritative registry of active listeners on a runtime, but **its entries do not expose the listener's HTTP path**. Each entry contains only:
+
+- `listenerId` — the listener-bearing **process** componentId (not the operation componentId)
+- `status` — `listening` | `paused` | `errored`
+- `connectorType` — e.g. `wss`
+
+So the registry can answer "what listeners are active on this runtime?" but cannot directly answer "are any of them on the same path?" To compare paths, you must enrich each entry by fetching its process and operation components.
+
+**Step 1 — enumerate active listeners via ListenerStatus async query:**
 
 ```bash
 # Start async query
-curl -X POST "https://api.boomi.com/api/rest/v1/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/query" \
-  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_TOKEN}" \
+curl -X POST "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/query" \
+  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
-  -d '{"QueryFilter":{"expression":{"operator":"EQUALS","property":"containerId","argument":["'${BOOMI_CONTAINER_ID}'"]}}}'
-# Returns {"asyncToken":{"token":"abc123..."}}
+  -d '{"QueryFilter":{"expression":{"operator":"EQUALS","property":"containerId","argument":["'${BOOMI_TEST_ATOM_ID}'"]}}}'
+# Returns {"asyncToken":{"token":"ListenerStatus-..."}}
 
 # Poll for results (replace TOKEN)
-curl "https://api.boomi.com/api/rest/v1/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/response/{TOKEN}" \
-  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_TOKEN}" -H "Accept: application/json"
+curl "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/response/{TOKEN}" \
+  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" -H "Accept: application/json"
 ```
 
-Look for multiple `connectorType="wss"` entries sharing paths.
+A successful response has the shape:
+
+```json
+{
+  "@type": "AsyncOperationResult",
+  "result": [
+    { "@type": "ListenerStatus", "listenerId": "<process componentId>", "status": "listening", "connectorType": "wss" }
+  ],
+  "numberOfResults": 1,
+  "responseStatusCode": 200
+}
+```
+
+**Step 2 — resolve each `listenerId` to its registered path** (only needed for collision comparison):
+
+1. `GET Component/{listenerId}` — fetch the process XML
+2. Locate the start step's `connectoraction[@connectorType='wss']` element and read its `operationId`
+3. `GET Component/{operationId}` — fetch the operation XML
+4. Read `WebServicesServerListenAction/@objectName` and `@operationType`
+5. The path is `/ws/simple/{lowercase(operationType)}{SentenceCase(objectName)}`
+
+For a fast path-level collision check **without** the per-listener Component enrichment, hit the suspected path directly with `scripts/boomi-wss-test.sh --method HEAD` and check the status code — a non-404 with valid perimeter credentials means a listener is registered there. Note that this approach is sensitive to the credentials being correct: see `references/platform_entities/shared_web_server.md` for the cloud-perimeter behavior that conflates "wrong creds" and "listener exists" if not handled carefully.
 
 ### Prevention
 

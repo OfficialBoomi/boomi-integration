@@ -12,9 +12,11 @@
    - **BOOMI_ENVIRONMENT_ID**: "Go to Manage → Atom Management, select your environment — the ID is in the URL. Say 'skip' to set later."
    - **BOOMI_TEST_ATOM_ID**: "In the same Atom Management page, select your runtime — the atom ID is in the URL. Say 'skip' to set later."
    - **SERVER_BASE_URL**: "What's your runtime's shared web server base URL? (e.g., https://c01-usa-west.integrate.boomi.com, or 'skip')"
-   - **SERVER_USERNAME**: "Runtime shared web server username for WSS testing? (Leave empty if auth is disabled, or 'skip')"
-   - **SERVER_TOKEN**: "Runtime shared web server token for WSS testing? (Leave empty if auth is disabled, or 'skip')"
-   - **SERVER_VERIFY_SSL**: "Verify SSL for runtime server? (false for self-signed, true for production — usually true)"
+   - **SERVER_AUTH_TYPE**: "What auth scheme does the runtime's listener port use? `basic` for Boomi public cloud (`*.integrate.boomi.com`) and most setups; `bearer` for Custom / Gateway / External Provider runtimes that take a bearer token; `none` for local runtimes with `minAuth=none`."
+   - **SERVER_USERNAME** *(if AUTH_TYPE=basic)*: "Basic-auth username for the runtime."
+   - **SERVER_TOKEN** *(if AUTH_TYPE=basic)*: "Basic-auth token paired with SERVER_USERNAME."
+   - **SERVER_BEARER_TOKEN** *(if AUTH_TYPE=bearer)*: "Bearer token sent as `Authorization: Bearer …` to the listener port."
+   - **SERVER_VERIFY_SSL**: "Verify SSL for the shared web server? (false for self-signed, true for production — usually true)"
    - **BOOMI_DEFAULT_BRANCH_ID**: "If you use Branch & Merge, what's your default working branch ID? (Find via Branch Management in the Boomi GUI, or 'skip')"
 
 2. **User creates .env file**:

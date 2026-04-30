@@ -74,7 +74,8 @@ if [[ -n "$EXECUTION_ID" && "$FETCH_LOGS" == "true" ]]; then
   log_content=""
 
   for (( k=1; k<=24; k++ )); do
-    dl_code=$(boomi_curl -o "$local_zip" -w "%{http_code}" -X GET "$download_url" --max-time 120)
+    boomi_api --out-file "$local_zip" -X GET "$download_url" --max-time 120
+    dl_code="$RESPONSE_CODE"
 
     if [[ "$dl_code" == "200" ]]; then
       if command -v unzip &>/dev/null; then
