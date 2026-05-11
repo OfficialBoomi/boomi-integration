@@ -1323,7 +1323,7 @@ A successful response has the shape:
 4. Read `WebServicesServerListenAction/@objectName` and `@operationType`
 5. The path is `/ws/simple/{lowercase(operationType)}{SentenceCase(objectName)}`
 
-For a fast path-level collision check **without** the per-listener Component enrichment, hit the suspected path directly with `scripts/boomi-wss-test.sh --method HEAD` and check the status code — a non-404 with valid perimeter credentials means a listener is registered there. Note that this approach is sensitive to the credentials being correct: see `references/platform_entities/shared_web_server.md` for the cloud-perimeter behavior that conflates "wrong creds" and "listener exists" if not handled carefully.
+For a fast path-level collision check **without** the per-listener Component enrichment, hit the suspected path directly with `<skill-path>/scripts/boomi-wss-test.sh --method HEAD` and check the status code — a non-404 with valid perimeter credentials means a listener is registered there. Note that this approach is sensitive to the credentials being correct: see `references/platform_entities/shared_web_server.md` for the cloud-perimeter behavior that conflates "wrong creds" and "listener exists" if not handled carefully.
 
 ### Prevention
 
@@ -1360,9 +1360,9 @@ After any schema change:
 3. Redeploy ALL processes using this connection
 
 ```bash
-bash <skill-path>/scripts/boomi-component-push.sh mcp-profile.xml
-bash <skill-path>/scripts/boomi-component-push.sh mcp-operation.xml
-bash <skill-path>/scripts/boomi-deploy.sh mcp-process.xml
+bash <skill-path>/scripts/boomi-component-push.sh active-development/profile.json/mcp-profile.xml
+bash <skill-path>/scripts/boomi-component-push.sh active-development/connector-action/mcp-operation.xml
+bash <skill-path>/scripts/boomi-deploy.sh active-development/process/mcp-process.xml
 ```
 
 ---
@@ -1738,16 +1738,16 @@ The platform API validates XML schema at push and deployment metadata at deploy,
 ### Wrong Pattern — Treating Deploy Success as Verification
 
 ```
-bash <skill-path>/scripts/boomi-component-push.sh processes/your_process.xml   # 200 OK
-bash <skill-path>/scripts/boomi-deploy.sh processes/your_process.xml            # SUCCESS: Deployed
+bash <skill-path>/scripts/boomi-component-push.sh process/your_process.xml   # 200 OK
+bash <skill-path>/scripts/boomi-deploy.sh process/your_process.xml            # SUCCESS: Deployed
 # — change considered verified, process never executed —
 ```
 
 ### Correct Pattern — Execute and Inspect the ProcessLog
 
 ```
-bash <skill-path>/scripts/boomi-component-push.sh processes/your_process.xml
-bash <skill-path>/scripts/boomi-deploy.sh processes/your_process.xml
+bash <skill-path>/scripts/boomi-component-push.sh process/your_process.xml
+bash <skill-path>/scripts/boomi-deploy.sh process/your_process.xml
 bash <skill-path>/scripts/boomi-test-execute.sh --process-id <guid>
 # inspect ProcessLog for Groovy compile/runtime errors before considering the change verified
 ```

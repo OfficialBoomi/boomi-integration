@@ -53,19 +53,19 @@ bash <skill-path>/scripts/boomi-folder-create.sh "WeatherAPI_Project"
 # Returns: folder_abc123def
 
 # STEP 2: Create components (XML must have folderId="folder_abc123def" attribute)
-bash <skill-path>/scripts/boomi-component-create.sh active-development/profiles/new-profile.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/<profile-type>/new-profile.xml  # <profile-type> is profile.json, profile.xml, profile.edi, etc.
 ```
 
 **Existing Components (UPDATE workflow)**:
 ```bash
 # Push (design-time update)
-bash <skill-path>/scripts/boomi-component-push.sh active-development/processes/my-process.xml
+bash <skill-path>/scripts/boomi-component-push.sh active-development/process/my-process.xml
 
 # Pull from platform
 bash <skill-path>/scripts/boomi-component-pull.sh --component-id <guid>
 
 # Deploy to runtime (REQUIRED before testing)
-bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/my-process.xml --deployment-notes "Optional notes"
+bash <skill-path>/scripts/boomi-deploy.sh active-development/process/my-process.xml --deployment-notes "Optional notes"
 
 # Execute process tests via platform API
 bash <skill-path>/scripts/boomi-test-execute.sh --process-id <guid>
@@ -77,7 +77,7 @@ bash <skill-path>/scripts/boomi-wss-test.sh --path /ws/simple/createOrder --meth
 bash <skill-path>/scripts/boomi-deploy.sh --list-environments
 
 # Undeploy by component file
-bash <skill-path>/scripts/boomi-undeploy.sh --by-component active-development/processes/my-process.xml
+bash <skill-path>/scripts/boomi-undeploy.sh --by-component active-development/process/my-process.xml
 
 # Undeploy by deployment ID
 bash <skill-path>/scripts/boomi-undeploy.sh <deploymentId>
@@ -110,7 +110,7 @@ bash <skill-path>/scripts/boomi-component-search.sh --type connector-settings,co
 
 # What references this component (and what does it reference)? Each record has a `relation` field
 # ("references" or "referenced-by") to distinguish direction.
-# Note: --related-to cannot be combined with other filters.
+# IMPORTANT: --related-to cannot be combined with other filters.
 bash <skill-path>/scripts/boomi-component-search.sh --related-to <componentId>
 ```
 
@@ -127,8 +127,8 @@ bash <skill-path>/scripts/boomi-branch.sh delete --branch feature-x
 
 # Component operations on a branch
 bash <skill-path>/scripts/boomi-component-pull.sh --component-id <guid> --branch feature-x
-bash <skill-path>/scripts/boomi-component-create.sh active-development/processes/new-process.xml --branch feature-x
-bash <skill-path>/scripts/boomi-component-push.sh active-development/processes/my-process.xml  # branch is sticky from XML
+bash <skill-path>/scripts/boomi-component-create.sh active-development/process/new-process.xml --branch feature-x
+bash <skill-path>/scripts/boomi-component-push.sh active-development/process/my-process.xml  # branch is sticky from XML
 
 # Merge operations
 bash <skill-path>/scripts/boomi-branch.sh merge --source feature-x --dest <target-branch>
@@ -136,7 +136,7 @@ bash <skill-path>/scripts/boomi-branch.sh merge-status --id <mergeRequestId>   #
 bash <skill-path>/scripts/boomi-branch.sh merge-execute --id <mergeRequestId>  # execute the merge
 
 # Deploy warns automatically if component is from a non-main branch
-bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/my-process.xml
+bash <skill-path>/scripts/boomi-deploy.sh active-development/process/my-process.xml
 ```
 
 **Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main.
@@ -161,8 +161,8 @@ See `references/guides/version_management_guide.md` for full version management 
 
 **Large Profile Analysis**:
 ```bash
-# Generate searchable field inventory (always outputs to active-development/profiles/distilled_<name>.json)
-python3 <skill-path>/scripts/boomi-profile-inspect.py active-development/profiles/large-profile.xml
+# Generate searchable field inventory (writes distilled_<name>.json next to the source profile XML)
+python3 <skill-path>/scripts/boomi-profile-inspect.py active-development/<profile-type>/large-profile.xml
 ```
 
 **When to use**: Run this tool immediately when attempting to Read a profile file and encountering a "file too large" error. The tool extracts element IDs with full hierarchical paths, enabling disambiguation of duplicate field names common in WSDL/SOAP-derived profiles (e.g., 60+ "First_Name" fields in different contexts).
@@ -170,7 +170,7 @@ python3 <skill-path>/scripts/boomi-profile-inspect.py active-development/profile
 **Supported profile types**: XML, EDI, and Flat File profiles. EDI output includes `purpose` field with semantic context.
 
 **Workflow after running**:
-1. Tool outputs pretty-printed JSON to `active-development/profiles/distilled_<ProfileName>.json`
+1. Tool writes pretty-printed JSON to `distilled_<ProfileName>.json` in the same folder as the source profile XML
 2. Use Read or Grep to search the distilled file for field keys, paths, and types
 3. If field comments are needed, grep the original profile by the field's `key` attribute
 
@@ -206,7 +206,7 @@ All tools use exception-based error handling and essential functionality only.
 
 ### Sync State Structure
 
-Components track synchronization state in `.sync-state/{folder}__{component-name}.json`. The filename is derived from the component's path relative to `active-development/` (e.g., `processes/My Process.xml` → `.sync-state/processes__My Process.json`). This prevents name collisions when different component types share the same name (e.g., a process and its operation both named "WSS Fetch EOQ Opps").
+Components track synchronization state in `.sync-state/{component-type}_{component-name}.json`. The filename is derived from the component's path relative to `active-development/` (e.g., `process/My Process.xml` → `.sync-state/process_My Process.json`). This prevents name collisions when different component types share the same name (e.g., a process and its operation both named "WSS Fetch EOQ Opps").
 
 ```json
 {
@@ -243,19 +243,26 @@ Components track synchronization state in `.sync-state/{folder}__{component-name
 - If component landed in root: Verify `BOOMI_TARGET_FOLDER` environment variable
 - Delete and recreate component with correct folder ID if misplaced
 
-### Component Type to Folder Mapping
-Maps Boomi API component types to local folders. Used by `boomi-component-pull.sh` for automatic routing.
+### Component Type & Folder Convention
 
-| Boomi API Component Type | Local Folder | Description |
-|-------------------------|--------------|-------------|
-| `process` | `active-development/processes/` | Integration processes |
-| `transform.map` | `active-development/maps/` | Data transformation maps |
-| `profile.*` | `active-development/profiles/` | Data structure profiles (profile.json, profile.xml, profile.db, etc.) |
-| `connector-settings` | `active-development/connections/` | Connection definitions |
-| `connector-action` | `active-development/operations/` | Connector operation definitions |
-| `documentcache` | `active-development/document-caches/` | Document cache definitions |
-| `script` | `active-development/scripts/` | Groovy/JavaScript scripts |
-| `processproperty` | `active-development/process-properties/` | Process Property components |
+**Folder rule:** Components live in `active-development/<component-type>/`, where `<component-type>` is the platform's component-type identifier (lowercase, verbatim — matches the component XML's `type=` attribute). Folders are created on demand by `boomi-component-pull.sh`; on the create-from-scratch path, `mkdir -p` the type folder yourself before writing the XML.
+
+**File rule:** Component definitions are always XML files (`.xml`), regardless of sub-type. A JSON profile is `<MyProfile>.xml` inside `active-development/profile.json/` — the folder names the type, the file extension reflects how Boomi stores it.
+
+**UI label ↔ component-type identifier** (only the cases where they diverge — for everything else, the identifier is the UI label lowercased with spaces removed: Process → `process`, Document Cache → `documentcache`, Trading Partner → `tradingpartner`, Flow Service → `flowservice`, etc.):
+
+| UI label | Component-type identifier |
+|---|---|
+| Connection | `connector-settings` |
+| Operation | `connector-action` |
+| Map | `transform.map` |
+| XML Profile | `profile.xml` |
+| JSON Profile | `profile.json` |
+| EDI Profile | `profile.edi` |
+| Flat File Profile | `profile.flatfile` |
+| Database Profile | `profile.db` |
+
+When **creating** a component, use the component-type identifier in the XML's `type=` attribute and as the folder name. When **pulling**, the platform returns the type and the script routes accordingly.
 
 ### Configuration System
 **Streamlined Configuration**:

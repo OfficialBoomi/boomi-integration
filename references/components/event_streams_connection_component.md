@@ -61,7 +61,7 @@ bash <skill-path>/scripts/event-streams-setup.sh query-tokens
 ```bash
 bash <skill-path>/scripts/event-streams-setup.sh provision-connection "MyESConnection" "MyToken" "MyFolder"
 ```
-The command builds the connection XML internally, pushes it to the platform (which encrypts the token), then pulls the encrypted component into `active-development/connections/`. Standard workflow: `query-tokens` or `create-token` → `provision-connection` → use the pulled connection in your process.
+The command builds the connection XML internally, pushes it to the platform (which encrypts the token), then pulls the encrypted component into `active-development/connector-settings/`. Standard workflow: `query-tokens` or `create-token` → `provision-connection` → use the pulled connection in your process.
 
 **Token Management:**
 - Token permissions (`allowConsume`/`allowProduce`) control which operations can use the token

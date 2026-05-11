@@ -21,7 +21,7 @@ REST Connection components define the base URL and authentication settings for R
 <?xml version="1.0" encoding="UTF-8"?>
 <bns:Component xmlns:bns="http://api.platform.boomi.com/" 
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               componentId="{generate-uuid}"
+               componentId=""
                name="{connection-name}"
                type="connector-settings"
                subType="officialboomi-X3979C-rest-prod"

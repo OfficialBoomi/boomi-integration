@@ -6,6 +6,25 @@ The official Boomi Companion skill for building Boomi integration processes prog
 
 This project is licensed under the [BSD-2-Clause License](LICENSE). If you fork or modify this code, you should not use the name "Boomi" for your version.
 
+## Documentation
+
+For a full overview of Boomi Companion, including concepts, usage guidance, and additional resources, see the [Boomi Companion overview](https://developer.boomi.com/docs/BoomiCompanion/Boomi_companion_overview) on the Boomi Developer Portal.
+
+## Related Plugins & Skills
+
+This skill is also part of [Boomi Companion](https://github.com/OfficialBoomi/boomi-companion), which includes the following Claude Code plugins:
+
+| Plugin | Description |
+|--------|-------------|
+| [bc-integration](https://github.com/OfficialBoomi/bc-integration) | Skills, commands, and agents for building Boomi integrations |
+| [bc-marketplace](https://github.com/OfficialBoomi/bc-marketplace) | Skill for searching and installing Boomi Marketplace recipes |
+
+Other skills available as standalone packages for use with other AI agents:
+
+| Skill | Description |
+|--------|-------------|
+| [boomi-marketplace](https://github.com/OfficialBoomi/boomi-marketplace) | Skill for searching and installing Boomi Marketplace recipes |
+
 ## Feedback & Issues
 
 Found a bug or have a feature idea? Email developer-offerings@boomi.com with a clear description, steps to reproduce, and any relevant error messages.
@@ -50,15 +69,9 @@ Once the skill is installed it works in an individual project folder as follows:
 your-project/
 ├── .env                    # Your credentials (created during setup)
 └── active-development/     # All working files (auto-created as needed)
-    ├── processes/          # Process XML files
-    ├── profiles/           # Profile XML files
-    ├── connections/        # Connection XML files
-    ├── operations/         # Operation XML files
-    ├── maps/               # Map XML files
-    ├── document-caches/    # Document cache XML files
-    ├── scripts/            # Script XML files
+    ├── <component-type>/   # Component-type folders are created on demand using the platform's lowercase component-type identifier — e.g. process/, transform.map/, profile.json/, profile.xml/, connector-settings/, connector-action/, documentcache/.
     ├── .sync-state/        # Component sync state tracking
-    └── feedback/           # Test execution results
+    └── feedback/           # Test execution results (created on demand)
 ```
 
 If using the skill via the bc-integration plugin, there is a series of quality of life setup steps that help template and spin up project workspaces rapidly. See the README.md file for the plugin for more details, or ask your AI agent for help. 

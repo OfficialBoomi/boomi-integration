@@ -32,8 +32,7 @@ The MCP Server Connection component configures authentication and server identit
 <bns:Component
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bns="http://api.platform.boomi.com/"
-  componentId="{component-guid}"
-  version="1"
+  componentId=""
   name="{Connection_Name}"
   type="connector-settings"
   subType="officialboomi-X3979C-mcp-prod"

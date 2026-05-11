@@ -45,7 +45,7 @@ The Document Cache component (`type="documentcache"`) defines the structure for 
 
 | Attribute | Required | Description |
 |-----------|----------|-------------|
-| `profileType` | Yes | **Must always be set.** Values: `profile.json`, `profile.xml`, `profile.flatfile`, `profile.database`, `profile.edi`, `profile.none`. Omitting this attribute entirely causes a runtime crash (`DataParserException: component null does not exist`). Use `profile.none` for format-agnostic caching (accepts any document format). |
+| `profileType` | Yes | **Must always be set.** Values: `profile.json`, `profile.xml`, `profile.flatfile`, `profile.db`, `profile.edi`, `profile.none`. Omitting this attribute entirely causes a runtime crash (`DataParserException: component null does not exist`). Use `profile.none` for format-agnostic caching (accepts any document format). |
 | `profile` | When not `profile.none` | GUID of the profile component. Required for all profile types except `profile.none`. With `profile.none`, omit this attribute — no profile component is needed. |
 | `enforceSingleLucene` | No | When `true` (GUI default), each document produces at most one index entry. Enables "retrieve all documents" and "remove by index name" operations. XSD default is `false` but platform GUI defaults to `true`. |
 

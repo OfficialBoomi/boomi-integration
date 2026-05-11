@@ -12,8 +12,10 @@
 Before authoring any listener, API, or HTTP endpoint, identify the target atom's API tier:
 
 ```bash
-bash <skill-path>/scripts/boomi-shared-server-info.sh $BOOMI_TEST_ATOM_ID
+bash <skill-path>/scripts/boomi-shared-server-info.sh
 ```
+
+Defaults to `$BOOMI_TEST_ATOM_ID` (the most common case); optionally - pass an atom ID literal as `$1` to override.
 
 Route by `apiType`:
 
@@ -72,7 +74,7 @@ Atom API tier is read from `SharedServerInformation/{atomId}.apiType` (values: `
 
 Three distinct silent-failure modes share this symptom. Triage in order (cheapest first):
 
-1. **apiType mismatch** — run `bash <skill-path>/scripts/boomi-shared-server-info.sh $BOOMI_TEST_ATOM_ID` and confirm `apiType=advanced`. A `basic` or `intermediate` atom deploys the component successfully but 404s every route.
+1. **apiType mismatch** — run `bash <skill-path>/scripts/boomi-shared-server-info.sh` (defaults to `$BOOMI_TEST_ATOM_ID`) and confirm `apiType=advanced`. A `basic` or `intermediate` atom deploys the component successfully but 404s every route.
 
 2. **Missing listener deploy** — packaging/deploying an API Service Component does not cascade to the processes it references. Confirm every `<route processId="...">` target is itself deployed active on the same environment. Redeploy any missing Listen processes, then retry.
 

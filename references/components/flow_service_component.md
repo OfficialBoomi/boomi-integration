@@ -146,23 +146,23 @@ Flow Service components require a specific deployment sequence:
 # Each XML must have folderId attribute set to the target folder GUID
 
 # 1. Create and push profiles (if needed)
-bash <skill-path>/scripts/boomi-component-create.sh active-development/profiles/request_profile.xml
-bash <skill-path>/scripts/boomi-component-create.sh active-development/profiles/response_profile.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/profile.json/request_profile.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/profile.json/response_profile.xml
 
 # 2. Create and push FSS operation (references profiles)
-bash <skill-path>/scripts/boomi-component-create.sh active-development/operations/fss_operation.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/connector-action/fss_operation.xml
 
 # 3. Create and push process (references operation)
-bash <skill-path>/scripts/boomi-component-create.sh active-development/processes/fss_process.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/process/fss_process.xml
 
 # 4. Create and push Flow Service (references process)
-bash <skill-path>/scripts/boomi-component-create.sh active-development/flow-services/my_flow_service.xml
+bash <skill-path>/scripts/boomi-component-create.sh active-development/flowservice/my_flow_service.xml
 
 # 5. Deploy process to environment
-bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/fss_process.xml
+bash <skill-path>/scripts/boomi-deploy.sh active-development/process/fss_process.xml
 
 # 6. Deploy Flow Service to environment (CRITICAL - often forgotten)
-bash <skill-path>/scripts/boomi-deploy.sh active-development/flow-services/my_flow_service.xml
+bash <skill-path>/scripts/boomi-deploy.sh active-development/flowservice/my_flow_service.xml
 ```
 
 ### Common Mistake

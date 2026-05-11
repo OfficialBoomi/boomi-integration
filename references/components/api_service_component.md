@@ -190,7 +190,7 @@ Agents creating a new API Service Component should emit these placeholders even 
 - **Linked WSS operation component** (`type="connector-action"`, `subType="wss"`) — referenced transitively via the process. See `web_services_server_start_shape_operation.md` for its structure.
 - **Profile components** — referenced by the WSS operation (`requestProfile`, `responseProfile`) and optionally by `<profileOverrides>` for per-route substitution.
 - **Advanced runtime** — deployment target.
-- **Repo convention**: pull scripts write this component type to `active-development/webservice/` (singular), alongside `processes/`, `operations/`, `profiles/`.
+- **Repo convention**: pull scripts write this component type to `active-development/webservice/`. Component folders are created on demand using the platform's lowercase component-type identifier.
 
 ## Common Patterns
 

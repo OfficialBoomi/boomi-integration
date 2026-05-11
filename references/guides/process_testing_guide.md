@@ -111,7 +111,7 @@ def build_wss_endpoint(operation_xml):
 
 **Step-by-Step Construction Process (FOLLOW EXACTLY):**
 
-1. **Read the WSS operation XML file** (e.g., `active-development/operations/MyOperation.xml`)
+1. **Read the WSS operation XML file** (e.g., `active-development/connector-action/MyOperation.xml`)
 2. **Find the `<WebServicesServerListenAction>` element**
 3. **Extract `operationType`** attribute value (e.g., `"GET"`)
 4. **Convert operationType to lowercase**
@@ -213,7 +213,7 @@ Example path formats:
 # Step 2: Compute path: /ws/simple/{lowercase(operationType)}{sentenceCase(objectName)}
 
 # Step 3: Deploy
-bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/YourProcess.xml
+bash <skill-path>/scripts/boomi-deploy.sh active-development/process/YourProcess.xml
 
 # Step 4: Wait for runtime propagation
 sleep 12
@@ -230,14 +230,14 @@ bash <skill-path>/scripts/boomi-wss-test.sh --path /ws/simple/createUser --metho
 Every test execution follows this workflow. Log retrieval is not optional — always download and review logs after running a process.
 
 **Regular processes (non-listener):**
-- [ ] Deploy the process: `bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/<process>.xml`
+- [ ] Deploy the process: `bash <skill-path>/scripts/boomi-deploy.sh active-development/process/<process>.xml`
 - [ ] Wait for runtime propagation (~12 seconds)
 - [ ] Execute: `bash <skill-path>/scripts/boomi-test-execute.sh --process-id <guid>`
 - [ ] Download logs: `bash <skill-path>/scripts/boomi-execution-query.sh --execution-id <execution-id> --logs`
 - [ ] Review logs — check Notify step output, errors, and processing flow
 
 **WSS listener processes:**
-- [ ] Deploy the process: `bash <skill-path>/scripts/boomi-deploy.sh active-development/processes/<process>.xml`
+- [ ] Deploy the process: `bash <skill-path>/scripts/boomi-deploy.sh active-development/process/<process>.xml`
 - [ ] If the deploy printed a COLLISION WARNING and this is a NEW process: STOP — change the objectName in the WSS Operation to something unique before proceeding (see boomi_error_reference.md Issue #19)
 - [ ] Wait for runtime propagation (~12 seconds)
 - [ ] Test endpoint: `bash <skill-path>/scripts/boomi-wss-test.sh --path /ws/simple/<path> --method POST --data '...'`

@@ -19,7 +19,7 @@ Custom Connector Connection components store configuration for connectors built 
 <?xml version="1.0" encoding="UTF-8"?>
 <bns:Component xmlns:bns="http://api.platform.boomi.com/"
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               componentId="{generate-uuid}"
+               componentId=""
                name="{connection-name}"
                type="connector-settings"
                subType="{connectorGroupID}-{classification}"

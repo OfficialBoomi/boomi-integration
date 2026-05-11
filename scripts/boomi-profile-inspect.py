@@ -2,10 +2,8 @@
 """
 Boomi Profile Inspection Tool
 
-Extracts mappable field metadata from large Boomi profile files,
+Extracts mappable field metadata from large Boomi XML profile files,
 providing hierarchical paths to disambiguate duplicate field names.
-
-Supports: XML, EDI, and Flat File profiles.
 
 Output: JSON inventory with element IDs and full paths for each field.
 
@@ -123,12 +121,10 @@ def main():
             "fields": compact_fields
         }
 
-        # Output to active-development/profiles/distilled_<name>.json
+        # Output sits next to the source profile XML — same folder, regardless of profile sub-type
         profile_name = result["profile"]["name"]
         safe_name = re.sub(r'[<>:"/\\|?*]', '_', profile_name).strip('. ')
-        profiles_dir = Path.cwd() / "active-development" / "profiles"
-        profiles_dir.mkdir(parents=True, exist_ok=True)
-        output_path = profiles_dir / f"distilled_{safe_name}.json"
+        output_path = profile_path.parent / f"distilled_{safe_name}.json"
 
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(compact_result, f, indent=2)

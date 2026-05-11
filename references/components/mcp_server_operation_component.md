@@ -38,8 +38,7 @@ The MCP Server Operation component defines a tool that AI agents can discover an
 <bns:Component
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bns="http://api.platform.boomi.com/"
-  componentId="{component-guid}"
-  version="1"
+  componentId=""
   name="{Operation_Name}"
   type="connector-action"
   subType="officialboomi-X3979C-mcp-prod"

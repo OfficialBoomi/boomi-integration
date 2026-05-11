@@ -118,5 +118,5 @@ A 401 response on a `*.integrate.boomi.com` URL where the runtime reports `minAu
 - `references/guides/api_conversion_patterns.md` — listener pattern decision (bare WSS vs. API Service Component) and cloud-perimeter troubleshooting.
 - `references/components/web_services_server_start_shape_operation.md` — WSS operation component XML.
 - `references/components/api_service_component.md` — Advanced-tier API publishing.
-- `scripts/boomi-shared-server-info.sh` — supplementary inspection of a runtime's apiType, default-port URL, and (when reportable) default-port auth.
-- `scripts/boomi-wss-test.sh` — test a listener endpoint; auth is configured via `.env` only.
+- `<skill-path>/scripts/boomi-shared-server-info.sh` — supplementary inspection of a runtime's apiType, default-port URL, and (when reportable) default-port auth.
+- `<skill-path>/scripts/boomi-wss-test.sh` — test a listener endpoint; auth is configured via `.env` only.

@@ -80,20 +80,9 @@ if [[ -n "$TARGET_PATH" ]]; then
     file_path="$TARGET_PATH"
   fi
 else
-  # Map component type to directory
-  local_dir="active-development"
+  # Folder name is the platform's lowercase component-type identifier (e.g. process/, transform.map/, profile.json/)
   type_lower=$(echo "$component_type" | tr '[:upper:]' '[:lower:]')
-  case "$type_lower" in
-    process)            local_dir+="/processes" ;;
-    transform.map)      local_dir+="/maps" ;;
-    profile.*)          local_dir+="/profiles" ;;
-    connector-settings) local_dir+="/connections" ;;
-    connector-action)   local_dir+="/operations" ;;
-    documentcache)      local_dir+="/document-caches" ;;
-    script)             local_dir+="/scripts" ;;
-    *)                  local_dir+="/${type_lower}" ;;
-  esac
-
+  local_dir="active-development/${type_lower}"
   mkdir -p "$local_dir"
 
   # Sanitize filename
