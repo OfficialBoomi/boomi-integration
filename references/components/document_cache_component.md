@@ -76,7 +76,7 @@ Keys use `xsi:type` for polymorphism. Three types:
 |-----------|-------------|
 | `id` | Platform-assigned integer key identifier |
 | `alias` | Display alias |
-| `propertyId` | Document/dynamic document/MIME property ID |
+| `propertyId` | Document/dynamic document/MIME property ID. Accepts any property namespace — `dynamicdocument.<name>`, `meta.base.<prop>`, `mime.<header>`, or connector-namespace properties like `connector.mailsdk.messageId` (useful for keying attachment caches off auto-tracked connector properties). |
 | `propertyName` | Property display name |
 | `defaultValue` | Default if property missing |
 
