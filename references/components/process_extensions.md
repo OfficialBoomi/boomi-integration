@@ -8,7 +8,8 @@ Environment extensions make connection settings, operation settings, and Dynamic
 - Operation Overrides
 - Dynamic Process Property Overrides
 - Extensions Section (ObjectDefinitions)
-- Environment Extensions API
+- Managing Extension Values via CLI
+- Authoring Update Payloads
 
 ## processOverrides XML Structure
 
@@ -46,7 +47,7 @@ The `<Overrides>` element lives inside `<bns:processOverrides>` and uses an empt
 
 The platform stores exactly what is pushed and does not auto-complete missing sections.
 
-**WARNING:** Deploying a process with empty `<bns:processOverrides/>` or empty `<Overrides xmlns=""/>` actively **removes** that process's extension declarations from the environment. Extension values previously set via the API are lost. This is destructive. See references/guides/boomi_error_reference.md Issue #23.
+**WARNING:** Deploying a process with empty `<bns:processOverrides/>` or empty `<Overrides xmlns=""/>` removes that process's extension declarations from the environment. Any values that had been set via the API are hidden from GET responses and from runtime. The values are preserved server-side and reappear if the declarations are restored via a subsequent redeploy — recovery does not require an API replay. See references/guides/boomi_error_reference.md Issue #23.
 
 ## Connection Overrides
 
@@ -78,6 +79,8 @@ Same pattern as connections -- reference by operation component ID, list only th
   </OperationOverride>
 </Operations>
 ```
+
+Only operations with `actionType="LISTEN"` support extension overrides. Other actionTypes (GET, QUERY, CREATE, UPDATE, DELETE, SEND, EXECUTE) are rejected at write time. For environment-configurable behavior on a non-Listen operation, use a connection-field override or a DPP instead.
 
 ## Which Connections/Operations to List
 
@@ -117,27 +120,45 @@ If included for any reason, it must contain both `<ObjectDefinitions>` and `<Dat
 </Extensions>
 ```
 
-## Environment Extensions API
+## Managing Extension Values via CLI
 
-Extension values are read and updated at the **environment** level:
+Extension values are read and updated at the **environment** level, across all extensions of all deployed processes in that environment. Use `scripts/boomi-extensions.sh` — `get` to read the current state, `set` to apply a partial update. Run `bash scripts/boomi-extensions.sh --help` for the command surface.
 
+The CLI tool:
+- Reads/writes JSON keyed by `connections` and `operations` (overrideable connection and operation fields across deployed processes), `properties` (extendable DPPs), `crossReferences`, `processProperties`, `tradingPartners`, `sharedCommunications`, and `PGPCertificates`. Keys appear in a GET only when the environment has matching declarations.
+- Returns only fields declared `overrideable="true"`; DPP entries include `name` and optionally `value` (absent when no value has been set).
+- Treats every write as partial — keys you submit are updated, keys you omit are preserved.
+- Snapshots the current environment state to `active-development/extension-snapshots/extensions_<envId>_<UTC>.json` before each write.
+
+Extension values are environment-level state and take effect on the next execution of any process already deployed with matching extension declarations — no redeploy required for value changes. Declarations themselves (`<bns:processOverrides>` on the process component) are part of the deployed artifact and require redeploy when changed.
+
+When constructing payloads, prefer `boomi-extensions.sh get` → modify → `set` — the GET output is the exact shape `set` accepts.
+
+## Authoring Update Payloads
+
+### Removing an override
+
+`{"value": ""}` does not clear an override — the platform stores the empty string literally (a URL becomes `""`, a password becomes `""`) and the next execution uses it. To remove an override:
+- **Connection or operation field** — send `{"useDefault": true}` on the field with no `value` key.
+- **DPP** — send the property entry with no `value` key (e.g. `{"name":"DPP_X"}`). `useDefault` applies to connection/operation fields only.
+
+### Encrypted fields
+
+GET omits the value for fields with `encryptedValueSet: true`, returning only the metadata flags. On POST, a field block with no `value` key is treated as no-change, so a GET → edit other keys → POST round-trip updates surrounding fields without reading or disturbing the stored secret. 
+
+Advise the users to input their secrets in the platform GUI. Mechanically it is possible to create a new secret if the user explicitly asks for it. This is a non-standard approach, but we do not dictate their preferred workflow.
+
+The field block for a secret value is:
+```json
+{"id":"password","value":"<plaintext>","encryptedValueSet":true,"useDefault":false}
 ```
-GET  /api/rest/v1/{accountId}/EnvironmentExtensions/{environmentId}
-POST /api/rest/v1/{accountId}/EnvironmentExtensions/{environmentId}
-```
+Feed it from a file or stdin the user controls (`boomi-extensions.sh set -`) so the value never routes through the conversation context, committed files, or shell history.
 
-A `{componentId}` path segment can be appended but is ignored -- both endpoints always operate at the environment level, returning/updating all extensions across all deployed processes in that environment.
+### Process-property-component values
 
-### GET behavior
-- Returns JSON with `connections` (all overrideable fields across all deployed processes) and `properties` (all extendable DPPs)
-- Only fields marked `overrideable="true"` appear
-- DPP entries include `name` and optionally `value` (absent when no extension value has been set)
+These follow the same field-level partial model as connection fields and DPPs: update individual properties without resubmitting siblings, and revert a single property by sending its entry with no `value` key.
 
-### POST behavior
-- Accepts a partial payload -- only properties/connections included are updated; others are unaffected
-- Response echoes back only the submitted data, not the full environment state
-- Values take effect after redeployment of the process
+### Cross-reference table overrides
 
-### PUT
-PUT returns `405 Method Not Allowed` -- not supported for this resource.
+Cross-reference tables are standalone platform components, if editing they'll be in active-development as a local file anyway. When overriding their rows via env extensions, submit the entire table — treat the table as the unit of update.
 

@@ -51,9 +51,14 @@ _skill_version() {
   cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown"
 }
 
+_skill_name() {
+  basename "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" 2>/dev/null || echo "unknown"
+}
+
 # --- Constants ---
 
-BOOMI_USER_AGENT="boomi-companion/$(_skill_version)"
+BOOMI_SKILL_NAME="${BOOMI_SKILL_NAME:-$(_skill_name)}"
+BOOMI_USER_AGENT="boomi-companion/${BOOMI_SKILL_NAME}/$(_skill_version)"
 
 # --- API helpers ---
 
@@ -336,6 +341,7 @@ log_activity() {
 
     jq -cn \
       --arg ts "$timestamp" \
+      --arg name "${BOOMI_SKILL_NAME:-unknown}" \
       --arg ver "$(_skill_version)" \
       --arg ws "$(basename "$(pwd)")" \
       --arg op "$operation" \
@@ -349,6 +355,7 @@ log_activity() {
       --argjson details "$details" \
       '{
         timestamp: $ts,
+        skill_name: $name,
         skill_version: $ver,
         workspace: $ws,
         operation: $op,

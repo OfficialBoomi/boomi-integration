@@ -201,6 +201,7 @@ Default to the local `references/` content — it is curated and verified for th
     ├── boomi-version-history.sh # List component version history (versions, dates, branch, current status)
     ├── boomi-component-diff.sh  # Compare two versions of a component (structured JSON diff)
     ├── boomi-component-search.sh # Query components by folder/name/type/reference; writes JSON to active-development/inventories/
+    ├── boomi-extensions.sh      # Get/set environment extension values via EnvironmentExtensions API; auto-snapshots current state before every write
     ├── event-streams-setup.sh   # Create Event Streams topics and subscriptions
     └── boomi-branch.sh         # Branch and merge operations (list, create, delete, merge, status)
 ```
@@ -356,6 +357,10 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 
 - `event-streams-setup.sh` - Create and manage Event Streams topics, subscriptions, and tokens
     - Commands: `query-tokens`, `create-token <name> [consume] [produce]`, `provision-connection <name> <token-name> <folder-id>`, `create-topic <name>`, `list-topics`, `query-topic <name>`, `create-subscription <topic> <name>`, `rest-produce <topic> <payload> [token-name]`
+
+- `boomi-extensions.sh` - Read and write environment extension *values* via the EnvironmentExtensions API
+    - Commands: `get`, `set --file <path>`, `set -` (stdin), `--help`
+    - Scope: values only; *declarations* (`<bns:processOverrides>`) go through `boomi-component-push.sh`. See `references/components/process_extensions.md` for payload shapes, partial-write behavior, and pre-write snapshots.
 
 The CLI tools reside at `<skill-path>/scripts/`. They are not in a given active development workspace.
 

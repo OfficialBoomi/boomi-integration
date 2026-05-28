@@ -1409,20 +1409,22 @@ Set `elementKey` to the loop's key, not a segment's key. With loop-level `elemen
 
 ---
 
-## Issue #23: Empty processOverrides Destroys Extensions
+## Issue #23: Empty processOverrides Hides Extensions Until Redeclared
 
 **Frequency:** High (any pull-modify-push workflow on processes with extensions)
 **Detection:** Silent - extension values disappear from environment after deployment
 
 ### The Problem
 
-Pushing a process with empty `<bns:processOverrides/>` or empty `<Overrides xmlns=""/>` actively **removes** that process's extension declarations from the environment. Extension values previously set via the Environment Extensions API are lost.
+Pushing a process with empty `<bns:processOverrides/>` or empty `<Overrides xmlns=""/>` removes that process's extension declarations from the environment. Values that had been set via the Environment Extensions API are hidden — they no longer appear in GET responses and are not used at runtime.
+
+The values are **not destroyed**: redeploying the process with its original `<bns:processOverrides>` block restored brings the declarations back, and the previously-set values reappear at their prior state. Recovery does not require a snapshot — only a clean redeploy.
 
 ### Why It Happens
 
-The platform stores exactly what is pushed. An empty processOverrides element is not "no change" -- it is "this process has no extensions." When deployed, the environment removes the extension declarations for that process.
+The platform stores exactly what is pushed. An empty processOverrides element is not "no change" -- it is "this process has no extensions." When deployed, the environment removes the extension declarations and the values become orphaned (preserved server-side but invisible to API and runtime until a matching declaration returns).
 
-### Wrong Pattern - Extensions Silently Destroyed
+### Wrong Pattern - Extensions Silently Hidden
 
 ```xml
 <!-- Pulled process had extensions, but processOverrides was emptied or left as self-closing -->
@@ -1430,7 +1432,7 @@ The platform stores exactly what is pushed. An empty processOverrides element is
   <bns:object>...</bns:object>
   <bns:processOverrides/>
 </bns:Component>
-<!-- Result: After push + deploy, all extension values for this process are gone -->
+<!-- Result: After push + deploy, this process's extension values are hidden from API and runtime -->
 ```
 
 ### Correct Pattern - Preserve Extensions
@@ -1460,6 +1462,10 @@ Before pushing any process that may have extensions:
 1. Check if pulled XML contained populated `<bns:processOverrides>` content
 2. Never replace populated overrides with self-closing `<bns:processOverrides/>`
 3. When creating new processes, use self-closing form only if the process genuinely has no extensions
+
+### Recovery
+
+If a push has already hidden extensions, restore the original `<bns:processOverrides>` block in the process XML and redeploy — values come back with their prior settings. No API replay is required.
 
 ---
 
