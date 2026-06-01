@@ -223,6 +223,9 @@ Branches execute sequentially (not simultaneously) - each branch gets a copy of 
 - **DDPs set within branch**: Only follow that specific branch path
 - **DPPs set in earlier branches**: Persist and are accessible in subsequent branches
 
+### Flow Control Steps
+The Flow Control step controls how documents passing through it are dispatched downstream: one at a time, in batches, or in parallel across multiple threads or runtime processes. It does not transform documents or affect routing — it changes the *cadence* and *concurrency* of the path immediately after it. Be careful not to overuse the flow control steps as they affect the performance and memory utilization of the basic runtime/process.
+
 ### Process Call Steps
 Enables modular design by routing documents into subprocesses. All subprocess branches complete and return their documents simultaneously to the parent process - this is a key architectural behavior that enables cross-branch document combination that would be impossible within a single process.
 

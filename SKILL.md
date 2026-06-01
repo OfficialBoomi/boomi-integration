@@ -164,6 +164,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── decision_step.md     # Conditional routing based on comparisons. Use when: implementing if/then logic, routing based on property values or field comparisons
 │   │   ├── route_step.md        # Multi-path conditional routing. Use when: routing documents to 3+ paths based on a value (switch/case), replacing chained decision steps
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows
+│   │   ├── flow_control_step.md # Batching and parallel fiber execution. Use when: serializing downstream steps per-document, splitting documents into batches, or spreading documents across parallel threads/processes
 │   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches
 │   │   ├── try_catch_step.md    # Error handling and exception routing. Use when: wrapping operations that may fail, implementing process-wide error handling
 │   │   ├── exception_step.md   # Terminate execution with error message. Use when: failing a document or process on validation failure, unhappy-path exits from Decision/Route
