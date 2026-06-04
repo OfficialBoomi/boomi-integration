@@ -23,13 +23,16 @@ Map functions transform data beyond simple field-to-field mapping. They're added
   - **Set operations**: No outputs (side effects only)
 - Functions container includes `optimizeExecutionOrder="true"` in observed examples
 
-### CRITICAL: Function Independence Policy
-**Each function widget should be standalone** - do not chain function outputs to other function inputs:
+### CRITICAL: Never Chain One Function Directly Into Another
 
-**AVOID Function Chaining**:
+**A `<Mapping>` must never have `function` on both ends.** Every mapping must have a profile on at least one side. A mapping where both `fromType="function"` and `toType="function"` wires one function's output straight into another function's input with no profile anchor — this is invalid and **must never be generated**.
+
+**The exact rule to self-check before emitting any `<Mapping>`:** if the line contains both `fromType="function"` and `toType="function"`, it is invalid. At least one endpoint must be `fromType="profile"` or `toType="profile"`.
+
+**FORBIDDEN — function-to-function chain:**
 ```xml
-<!-- DON'T DO THIS: Function-to-function chaining -->
-<Mapping fromFunction="1" fromKey="3" fromType="function"
+<!-- INVALID: both ends are function, no profile anchor -->
+<Mapping fromFunction="1" fromKey="2" fromType="function"
          toFunction="2" toKey="1" toType="function"/>
 ```
 
@@ -45,9 +48,9 @@ Map functions transform data beyond simple field-to-field mapping. They're added
    <Mapping fromFunction="1" fromKey="4" fromType="function" toKey="11" toType="profile"/>
    ```
 
-2. **For complex multi-step transformations requiring a pipeline**, use a single Groovy function that handles all the steps internally instead of multiple chained function widgets
+2. **For complex multi-step transformations requiring a pipeline**, use a single Groovy function that handles all the steps internally instead of multiple chained function widgets.
 
-3. There are multi-step function components in the platform, but they are out of scope for this project. If you encounter them try your best and inform the user that you don't have specific features built for those.
+3. **If two functions appear to need chaining** (e.g. `Get Current Date` → `Date Format`), do NOT wire them together. There are multi-step function components in the platform called User Defined Functions (`FunctionStep category="userdefined"` and `type="userdefined"`), but they are not yet implemented. If you encounter them inform the user that you don't have documentation.
 
 ### CRITICAL: Required GUI Attributes
 All functions MUST include these attributes for proper GUI rendering:
@@ -310,6 +313,7 @@ See `cross_reference_table_component.md` for full details: multi-input examples,
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <bns:Component xmlns:bns="http://api.platform.boomi.com/" 
+               componentId="" 
                folderId="[FOLDER_ID]" 
                name="Order Processing Map" 
                type="transform.map">

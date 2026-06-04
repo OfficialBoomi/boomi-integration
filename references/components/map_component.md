@@ -42,6 +42,7 @@ Boomi auto-generates additional attributes (keyPath, namePath) to support the ma
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <bns:Component xmlns:bns="http://api.platform.boomi.com/" 
+               componentId="" 
                folderId="[FOLDER_ID]" 
                name="[MAP_NAME]" 
                type="transform.map">
