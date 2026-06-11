@@ -93,6 +93,7 @@ Keys use `xsi:type` for polymorphism. Three types:
   - **XML**: Mismatch causes runtime error (`Unable to create XML files from data, the document may not be well-formed xml`)
   - **Flat File**: No format validation — the parser treats any text as delimited data. Mismatched documents are silently accepted but produce 0 records (nothing is cached, no error raised)
   - **EDI**: No format validation — same silent-acceptance pattern as flat file. Non-EDI documents produce 0 records with no error.
+  - **Database (Legacy)** (`profile.db`): No format validation — same silent-acceptance pattern as flat file/EDI. The cached document is the Database (Legacy) connector's delimited read envelope (`DBSTART|…|DBEND`), not XML/JSON. A non-conforming document produces 0 records with no error.
   - **None** (`profile.none`): No format validation — any document format is accepted and cached.
 
 ## Map Lookup Constraints
@@ -131,6 +132,17 @@ Neither approach iterates over repeating elements within a single cached documen
   </CacheIndex>
 </DocumentCache>
 ```
+
+### Database (Legacy) Profile with Profile Element Key
+```xml
+<DocumentCache enforceSingleLucene="true" profile="d85c6ccc-87f2-4013-ae71-c4d065a5e8f1" profileType="profile.db">
+  <CacheIndex indexId="1" indexName="BusinessEntityID">
+    <cacheKey alias="BusinessEntityID" elementKey="6" id="2" name="BusinessEntityID" taglistKey="0" xsi:type="ProfileElementKeyConfig"/>
+  </CacheIndex>
+</DocumentCache>
+```
+
+`profile` references a Database Profile component, and `elementKey` references one of that profile's `result_set` output columns (`DatabaseElement key`). A single Database Profile can serve both the connector read and the cache — the cache keys off a read output column value (here `BusinessEntityID`). The cached document is the connector's delimited read envelope; cache keying and retrieval by that column value work as with any profile element key.
 
 ### No Profile (profile.none) with Document Property Key
 ```xml

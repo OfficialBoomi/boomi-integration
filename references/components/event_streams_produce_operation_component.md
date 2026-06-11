@@ -48,7 +48,7 @@ SubType: `officialboomi-X3979C-events-prod`
 | Field | Type | Example | Notes |
 |-------|------|---------|-------|
 | topic | string | "my-topic" | Topic name configured in Event Streams |
-| producerAccessMode | string | "Exclusive" | |
+| producerAccessMode | string | "Exclusive" | How many producers may attach to the topic. `Shared`: multiple producers can publish to the topic. `Exclusive`: only one producer can publish to the topic. Producer-side concurrency only — independent of consumer `subscriptionType` and unrelated to dead-lettering |
 | compressionType | string | "NONE" | |
 | messageProperties | customproperties | (empty) | Usage TBD - leave `<customProperties/>` empty for standard use cases |
 

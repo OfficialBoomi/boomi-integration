@@ -51,8 +51,8 @@ stamp_origin_file "$FILE_PATH"
 # --- Resolve branch ---
 BRANCH_ID=$(resolve_effective_branch "$BRANCH" "$(detect_xml_branch "$FILE_PATH")")
 
-# --- Prepare XML: blank componentId for CREATE, inject branch if needed ---
-prepared_xml=$(sed 's/componentId="[^"]*"/componentId=""/' "$FILE_PATH")
+# --- Prepare XML: blank ONLY the root component's own componentId for CREATE (keep nested references), inject branch if needed ---
+prepared_xml=$(awk 'BEGIN{d=0} !d && sub(/componentId="[^"]*"/,"componentId=\"\""){d=1} 1' "$FILE_PATH")
 if [[ -n "$BRANCH_ID" ]]; then
   prepared_xml=$(inject_branch_id "$prepared_xml" "$BRANCH_ID")
   echo "Creating component '${COMPONENT_NAME}' on branch ${BRANCH:-$BRANCH_ID}"
@@ -84,12 +84,12 @@ if [[ -z "$component_id" ]]; then
   exit 0
 fi
 
-# --- Update local file with generated ID (only replace the empty-string placeholder) ---
-sedi "s/componentId=\"\"/componentId=\"${component_id}\"/" "$FILE_PATH"
+# --- Update local file with generated ID (fill the first empty componentId; newline-safe via awk) ---
+awk -v id="$component_id" 'BEGIN{d=0} !d && sub(/componentId=""/,"componentId=\"" id "\""){d=1} 1' "$FILE_PATH" > "${FILE_PATH}.tmp" && mv "${FILE_PATH}.tmp" "$FILE_PATH"
 
-# Add version="1" if not present
+# Add version="1" if not present (newline-safe via awk)
 if ! grep -q 'version="' "$FILE_PATH"; then
-  sedi "s/componentId=\"${component_id}\"/componentId=\"${component_id}\" version=\"1\"/" "$FILE_PATH"
+  awk -v id="$component_id" 'BEGIN{d=0} !d && sub("componentId=\"" id "\"","componentId=\"" id "\" version=\"1\""){d=1} 1' "$FILE_PATH" > "${FILE_PATH}.tmp" && mv "${FILE_PATH}.tmp" "$FILE_PATH"
 fi
 
 # Write branchId back into local XML so push/deploy can detect it

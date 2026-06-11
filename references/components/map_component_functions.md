@@ -48,7 +48,7 @@ Map functions transform data beyond simple field-to-field mapping. They're added
    <Mapping fromFunction="1" fromKey="4" fromType="function" toKey="11" toType="profile"/>
    ```
 
-2. **For complex multi-step transformations requiring a pipeline**, use a single Groovy function that handles all the steps internally instead of multiple chained function widgets.
+2. **For complex multi-step transformations requiring a pipeline**, use a single scripting function that handles all the steps internally instead of multiple chained function widgets.
 
 3. **If two functions appear to need chaining** (e.g. `Get Current Date` → `Date Format`), do NOT wire them together. There are multi-step function components in the platform called User Defined Functions (`FunctionStep category="userdefined"` and `type="userdefined"`), but they are not yet implemented. If you encounter them inform the user that you don't have documentation.
 
@@ -80,22 +80,22 @@ All functions MUST include these attributes for proper GUI rendering:
 
 ## Available Functions
 
-### 1. Groovy Scripting
+### 1. Custom Scripting
 
-**Purpose**: Custom data transformation logic using Groovy scripts
+**Purpose**: Custom field-level transformation logic via the **Scripting** function, written in Groovy or JavaScript
 
 **Critical Concept**: The names you define for inputs/outputs become BOTH:
 - The mappable nodes visible in the Boomi GUI
-- The actual variable names available in your Groovy script
+- The actual variable names available in your script
 
 For example, if you define `<Input key="1" name="customer_name"/>`, then:
 - "customer_name" appears as a mappable node in the GUI
-- `customer_name` is directly available as a variable in your script
+- `customer_name` is directly available as a variable in your script — it's pre-declared, so don't re-declare it
 
 **Minimal Configuration**:
 ```xml
-<FunctionStep category="Scripting" key="1" name="Scripting" 
-              position="1" type="Scripting">
+<FunctionStep category="Scripting" cacheEnabled="true" key="1" name="Scripting"
+              position="1" sumEnabled="false" type="Scripting" x="10.0" y="10.0">
   <Inputs>
     <Input key="1" name="first_input"/>
     <Input key="2" name="second_input"/>
@@ -116,9 +116,6 @@ String processedValue = first_input + " - " + second_input
 // Set output variables by the names you defined
 first_output = processedValue
 second_output = "some other value"
-
-// For multiple outputs, return an array in the order defined
-return [first_output, second_output]
       ]]></ScriptToExecute>
       <Input dataType="character" index="1" name="first_input"/>
       <Input dataType="character" index="2" name="second_input"/>
@@ -133,7 +130,32 @@ return [first_output, second_output]
 - XML entities in script: `>` becomes `&gt;`, `<` becomes `&lt;`
 - Input names are defined twice (in Inputs section and Configuration/Scripting section)
 - Index values in Configuration match key values in Inputs/Outputs
-- Multiple outputs require returning an array
+- Outputs bind by assignment to the named output variable; a `return` statement is not needed for output binding (a returned value is ignored)
+
+**Script storage form**: author the script body in CDATA (`<![CDATA[ ... ]]>`) or entity-escaped — both are accepted on create. The platform stores and returns it entity-escaped, never CDATA (so a CDATA-authored local copy shows a cosmetic diff against the pulled copy).
+
+**Input Data Types**: each `<Input>` in the `<Configuration><Scripting>` section carries a `dataType` that sets the Java type and null behavior of the script variable:
+
+| `dataType` | Java type | Null behavior |
+|------------|-----------|---------------|
+| `character` | `java.lang.String` | Never null — a null, blank, or omitted source value becomes `""` |
+| `integer` | `java.lang.Long` | Can be null |
+| `float` | `java.lang.Double` | Can be null (double-precision; out-of-range values are rounded) |
+| `datetime` | `java.util.Date` | Can be null |
+
+Leave an input as `character` for text fields, but **for numeric or date fields prefer the real `dataType`**: an `integer`/`float`/`datetime` input arrives as a ready-to-use Java `Long`/`Double`/`Date` (a `datetime` is a `Date` you format directly), sparing you the manual string parsing that `character` would force. Typed values can be null, so null-check before operating (and test a date with `instanceof Date` rather than parsing a string). The function-input `dataType` above is a distinct vocabulary from a profile field's `dataType`: a profile field of type `number` feeds an `integer` or `float` function input, and a profile field of type `datetime` feeds a `datetime` function input. Outputs carry no `dataType` — their type is inferred from the value the script assigns.
+
+**Scripting language**: the `language` attribute selects the script language, for both inline scripts and Map Scripting components:
+
+| GUI label | `language` value |
+|-----------|------------------|
+| Groovy 1.5 | `groovy` |
+| Groovy 2.4 | `groovy2` |
+| JavaScript | `javascript` |
+
+**Default to `groovy2` (Groovy 2.4)** — it is consistent with the rest of the skill's scripting and handles the typed inputs above as native Java objects. Avoid Groovy 1.5 for new work. Use JavaScript only on explicit request or when existing assets are JavaScript: it runs on the Nashorn engine (access Java classes via `Packages`/`importClass`) and does not support Java-style `class` declarations. Outputs bind by assignment to the named output variable in every language — a `return` value is ignored.
+
+**Inline vs. reusable component**: an inline script lives only in its own map; a standalone `script.mapping` component can be referenced by multiple maps and tracked as its own component. Use inline for a single-map transformation, and a component when the same script is (or may be) reused across maps — both are equally valid. See `map_script_component.md`.
 
 ### 2. Date Format
 
@@ -346,7 +368,7 @@ See `cross_reference_table_component.md` for full details: multi-input examples,
           </Outputs>
           <Configuration>
             <Scripting language="groovy2">
-              <ScriptToExecute>
+              <ScriptToExecute><![CDATA[
 // Variables order_amount and customer_tier are directly available
 BigDecimal amount = new BigDecimal(order_amount ?: "0")
 String tier = customer_tier ?: "STANDARD"
@@ -359,10 +381,7 @@ if (tier == "PLATINUM") discount = amount * 0.15
 // Set the output variables we defined
 final_price = (amount - discount).toString()
 discount_applied = discount.toString()
-
-// Return array matching output order
-return [final_price, discount_applied]
-              </ScriptToExecute>
+              ]]></ScriptToExecute>
               <Input dataType="character" index="1" name="order_amount"/>
               <Input dataType="character" index="2" name="customer_tier"/>
               <Output index="3" name="final_price"/>
@@ -380,12 +399,6 @@ return [final_price, discount_applied]
 ```
 
 ## Key Observations
-
-### Groovy Variable Naming
-The power of Groovy functions is that YOU define the interface:
-- Choose meaningful names like `customer_email`, `order_total`, `tax_rate`
-- These become the exact variable names in your script
-- No additional declaration needed - they're just available
 
 ### Function Key Patterns
 - **Function keys** assigned by creation order (1,2,3...), gaps possible from deletions (e.g., 1,3,4,5,6,7,9)

@@ -43,7 +43,7 @@ Single attribute — all cache structure is defined in the referenced component.
 - The entire document and all index entries are cached, not just key values
 - If any key value is an empty string or explicit null, the step **fails with an error** (`Error indexing document. Could not determine value for Index key: [keyName]`). However, if the key field is entirely **absent** from the document, Add to Cache silently accepts it (no error raised)
 - **Documents are consumed** — Add to Cache is a document sink. Downstream steps receive zero documents even when connected via dragpoints. Always use as the terminal step in a branch.
-- **Format validation varies by profile type**: JSON and XML caches error on format mismatch. Flat file and EDI caches silently accept any text — mismatched documents produce 0 records with no error. See component reference for details.
+- **Format validation varies by profile type**: JSON and XML caches error on format mismatch. Flat file, EDI, and Database (Legacy) caches silently accept non-conforming documents — they produce 0 records with no error. See component reference for details.
 
 ---
 

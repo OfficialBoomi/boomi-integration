@@ -1,5 +1,20 @@
 # Event Streams Platform Reference
 
+## Contents
+- Overview
+- Architecture
+- CLI Tool
+- Topic REST Produce API
+- Topic and Subscription Configuration
+- Integration Patterns
+- Operation Comparison
+- Operation Selection Guide
+- Platform Behavior
+- Known Constraints
+- Dead-Letter Queues
+- GraphQL API Reference
+- URL Reference
+
 ## Overview
 
 Event Streams is Boomi's cloud-based message queuing and streaming service. Topics and subscriptions are configured via the Event Streams GUI or GraphQL API, while Integration processes interact through connector components.
@@ -136,6 +151,32 @@ Batch Process:
 - All operations use binary profile types (requestProfileType/responseProfileType)
 - Connection uses environment-specific encrypted token
 
+## Dead-Letter Queues
+
+A dead-letter queue (DLQ) holds messages a subscription's consumer repeatedly failed to process. Each subscription has its **own** DLQ — two subscriptions on the same topic dead-letter independently.
+
+### How a message reaches the DLQ
+
+Dead-lettering is driven entirely by the consuming **Listen** operation; there is no setting that "enables" a DLQ, and only a Listen consumer can dead-letter. (A Consume operation never dead-letters — it has no `maxRetries`, and an unacknowledged message just returns to the backlog. See `references/components/event_streams_consume_operation_component.md`.) A Listen message is dead-lettered only when **all three** hold:
+
+- `subscriptionType="Shared"` — Exclusive and Failover retry indefinitely and never dead-letter.
+- `transacted="true"` — the message is acked only on success. With `transacted="false"` it is acked on receipt, so a failure never redelivers or dead-letters.
+- `maxRetries` — the redelivery ceiling.
+
+The broker redelivers a failed/unacked message after the ack timeout; once redeliveries exceed `maxRetries` it moves the message to the DLQ. A message lands there because the **consumer kept failing**.
+
+### Reprocessing
+
+A message leaves the DLQ only when a consumer acks it. To reprocess, run a Consume operation with `consumeFromDeadLetter="true"` (see `references/components/event_streams_consume_operation_component.md`), which reads the DLQ instead of the main backlog. Typical pattern: consume from the DLQ → inspect/transform → Produce back to the original topic.
+
+The DLQ records only that the consumer failed, not *why* — a message that failed because a downstream system was briefly unavailable looks identical to one that failed because its data can never be processed. So an unprocessable message will loop DLQ → reprocess → fail → DLQ forever. Cap it with an **application-level attempt counter in the payload** (separate from the broker's `maxRetries`, which the broker doesn't expose here) and route exhausted messages to a quarantine topic.
+
+### Management surface
+
+There is **no enable/configure/reprocess surface**: `EventStreamsSubscriptionCreateInput` (used for create and update) has no DLQ-policy fields, and no mutation reprocesses a DLQ. (`eventStreamsSubscriptionClearBacklog` clears the *main* backlog; `eventStreamsRoute*` is general topic routing.) The only reprocess path is a `consumeFromDeadLetter="true"` Consume.
+
+**The GraphQL DLQ read surface is unreliable — don't depend on it.** `deadLetterBacklogCount`, `retryBacklogCount`, and `eventStreamsDeadLetterQueueMessages` exist but return `0`/empty even when the DLQ holds messages (the equivalent *main-queue* fields are accurate — the gap is DLQ-specific). **To inspect or count a DLQ, drain it with a `consumeFromDeadLetter="true"` Consume.** The `eventStreamsDeadLetterQueueMessageDelete` mutation exists but is not practical — it needs message IDs that only the blind list query provides.
+
 ## GraphQL API Reference
 
 For advanced usage or automation beyond the CLI tool. Requires JWT token authentication (`GET /auth/jwt/generate/{account_id}` with Basic auth, then `POST /graphql` with Bearer token).
@@ -188,7 +229,7 @@ mutation {
 }
 ```
 
-Optional diagnostic fields (include only when troubleshooting): `producerCount`, `subscriptionCount`, `backlogCount`, `backlogSize`, `messageRateIn`, `messageRateOut`. Subscriptions also support `backlogCount`, `activeConsumerCount`.
+Optional diagnostic fields (include only when troubleshooting): `producerCount`, `subscriptionCount`, `backlogCount`, `backlogSize`, `messageRateIn`, `messageRateOut`. Subscriptions also support `backlogCount` and `activeConsumerCount`. (A `deadLetterBacklogCount` field also exists but is unreliable — see Dead-Letter Queues → Management surface; use a `consumeFromDeadLetter="true"` Consume to inspect a DLQ instead.)
 
 ### Subscription Operations
 

@@ -193,6 +193,8 @@ Extract values from documents and store as DDPs/DPPs for downstream use. Enable 
 
 This choice affects entire process architecture - Listen processes will be triggered in real time by a mechanism external to the process, Consume processes will run on schedule or manually by a user.
 
+**Dead-Letter Queues:** Each subscription has its own DLQ. Messages are dead-lettered only when the consuming operation is configured for it — `subscriptionType="Shared"` + `transacted="true"` (Listen) + a `maxRetries` ceiling — at which point a repeatedly-failing message is redelivered until `maxRetries` is exceeded, then moved to the DLQ. There is no GUI/API toggle to enable a DLQ and no reprocessing API; reprocess with a `consumeFromDeadLetter="true"` Consume operation (inspect → produce back to the original topic), capping attempts via a payload counter to avoid poison-message loops. See `platform_entities/event_streams.md`.
+
 ### Data Process Steps
 The "Swiss army knife" for document manipulation when Maps or Message steps aren't sufficient. Supports sequential processing actions where each operation's output feeds the next.
 
