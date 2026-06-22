@@ -245,18 +245,25 @@ set_root_component_id() {
     BEGIN { done = 0; intag = 0 }
     {
       if (!done) {
-        if (!intag && match($0, /<bns:Component|<Component/)) intag = 1
+        start = 1
+        if (!intag) {
+          ts = match($0, /<bns:Component|<Component/)
+          if (ts) { intag = 1; start = ts }
+        }
         if (intag) {
-          gt = index($0, ">")
-          ci = match($0, /componentId="[^"]*"/)
+          rest = substr($0, start)
+          gt = index(rest, ">")
+          ci = match(rest, /componentId="[^"]*"/)
           if (ci > 0 && (gt == 0 || ci < gt)) {
             # componentId belongs to the root open tag — replace its value
-            $0 = substr($0, 1, ci - 1) "componentId=\"" id "\"" substr($0, ci + RLENGTH)
+            abs = start + ci - 1
+            $0 = substr($0, 1, abs - 1) "componentId=\"" id "\"" substr($0, abs + RLENGTH)
             done = 1; intag = 0
           } else if (gt > 0) {
             # root open tag closes here with no componentId — insert before the close
-            ins = gt
-            if (substr($0, gt - 1, 1) == "/") ins = gt - 1
+            abs = start + gt - 1
+            ins = abs
+            if (substr($0, abs - 1, 1) == "/") ins = abs - 1
             $0 = substr($0, 1, ins - 1) " componentId=\"" id "\"" substr($0, ins)
             done = 1; intag = 0
           }
