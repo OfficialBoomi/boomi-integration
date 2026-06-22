@@ -51,12 +51,12 @@ The platform stores exactly what is pushed and does not auto-complete missing se
 
 ## Connection Overrides
 
-List each connection by component ID, with overrideable fields specified. Only fields you want to be environment-configurable need to be listed.
+Each connection is listed by component ID. **Every `<field>` must carry the connector-specific `xpath` attribute that binds the override onto the underlying connection attribute.** A field without its `xpath` is *declared but inert*: it shows as overrideable in the GUI and the extensions GET (`boomi-extensions.sh get`) reports it with `useDefault=false` and the set value, but at request time the extension value is silently ignored and the connector uses the connection component's baked-in default. There is no deploy error and no execution error — only the wrong value is used. See references/guides/boomi_error_reference.md Issue #31.
 
 ```xml
 <Connections>
   <ConnectionOverride id="c7d489dc-0818-4bfa-9d4b-c3e75a4f8e74">
-    <field id="url" label="URL" overrideable="true"/>
+    <field id="url" label="URL" overrideable="true" xpath="HttpSettings/@url"/>
   </ConnectionOverride>
 </Connections>
 ```
@@ -64,21 +64,24 @@ List each connection by component ID, with overrideable fields specified. Only f
 - `id` on `ConnectionOverride` = the connection's component ID (must reference a real platform component)
 - `field id` = the field identifier from the connection's configuration
 - `label` = human-readable name shown in the Boomi GUI extensions tab
-- `overrideable="true"` = configurable per-environment
+- `overrideable="true"` = configurable per-environment; `overrideable="false"` = listed but fixed
+- `xpath` = the binding from the field to the connection XML attribute it overrides. Required on every field. For the HTTP Client `url` field this is `HttpSettings/@url`.
 
-The full field enumeration pattern (listing all fields with `overrideable="false"` on those you don't want configurable) is a GUI convention, not a requirement. List only what you want overrideable.
+**Emit the complete canonical `<ConnectionOverride>` block for the connector type — not a hand-picked subset.** The platform generates the block with every field enumerated, each carrying its own `xpath`, and uses `overrideable` to toggle which ones are configurable. The reliable way to obtain it is to configure the override once in the platform GUI and pull the process component back: the pulled `<bns:processOverrides>` holds the full field list with correct xpaths. Reuse that block and set `overrideable="true"` on the fields you want configurable. Hand-authoring a subset is the common source of missing-`xpath` inert overrides.
 
 ## Operation Overrides
 
-Same pattern as connections -- reference by operation component ID, list only the fields you want overrideable.
+Same pattern as connections: reference by operation component ID, and **every listed `<field>` must carry its operation-specific `xpath`** — the same inert-override rule applies (a field without `xpath` is silently ignored at request time). Emit the platform-generated block for the operation type rather than a hand-authored subset; obtain the correct `xpath` values from the pulled component as described under Connection Overrides.
 
 ```xml
 <Operations>
   <OperationOverride id="177e7603-38c3-49bb-b083-df2fc71459b3">
-    <field id="toolName" label="Tool Name" overrideable="true"/>
+    <field id="toolName" label="Tool Name" overrideable="true" xpath="{operation-specific-xpath}"/>
   </OperationOverride>
 </Operations>
 ```
+
+The `xpath` value is specific to the operation/connector type — take it from the platform-generated block; do not guess it. The `{operation-specific-xpath}` placeholder above stands in for that value.
 
 Only operations with `actionType="LISTEN"` support extension overrides. Other actionTypes (GET, QUERY, CREATE, UPDATE, DELETE, SEND, EXECUTE) are rejected at write time. For environment-configurable behavior on a non-Listen operation, use a connection-field override or a DPP instead.
 

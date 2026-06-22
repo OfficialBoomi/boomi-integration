@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Push a local component XML file to the Boomi platform (update)
-# Usage: bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--test-connection]
+# Usage: bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force] [--test-connection]
 
 source "$(dirname "$0")/boomi-common.sh"
 load_env
@@ -13,12 +13,36 @@ TEST_CONN=false
 BRANCH=""
 FORCE=false
 
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force]
+  bash scripts/boomi-component-push.sh --test-connection
+
+Pushes a local component XML file to the Boomi platform as an update.
+
+Arguments:
+  <file_path>            Path to the component XML file to push.
+
+Options:
+  --branch <name|id>     Target branch (name or id). Defaults to the XML's
+                         branchId, then BOOMI_DEFAULT_BRANCH_ID, then main.
+  --force                Push even when the content matches the last push
+                         (skips the content-hash short-circuit).
+  --test-connection      Verify platform credentials and exit.
+  -h, --help             Show this help and exit.
+
+Side effects: creates a new component version on the platform; updates local sync state.
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-connection) TEST_CONN=true; shift ;;
     --branch)          BRANCH="$2"; shift 2 ;;
     --force)           FORCE=true; shift ;;
-    -*)                echo "Unknown option: $1" >&2; exit 1 ;;
+    -h|--help)         usage; exit 0 ;;
+    -*)                echo "Unknown option: $1" >&2; usage; exit 1 ;;
     *)                 FILE_PATH="$1"; shift ;;
   esac
 done
@@ -29,7 +53,8 @@ if $TEST_CONN; then
 fi
 
 if [[ -z "$FILE_PATH" ]]; then
-  echo "Usage: bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force]" >&2
+  echo "ERROR: missing <file_path>." >&2
+  usage
   exit 1
 fi
 
@@ -60,12 +85,13 @@ state_name="$(_sync_state_name "$FILE_PATH")"
 
 for sf in "${sync_dir}/${state_name}.json" "${sync_dir}/${COMPONENT_NAME}.json"; do
   if [[ -f "$sf" ]]; then
-    last_hash=$(jq -r '.content_hash // empty' "$sf" 2>/dev/null)
+    last_hash=$(jq -r '.content_hash // empty' < "$sf" 2>/dev/null)
     if [[ -n "$last_hash" && "$current_hash" == "$last_hash" ]]; then
       if $FORCE; then
         echo "Force push — skipping content hash check"
       else
-        echo "Component '${COMPONENT_NAME}' is up to date (no changes detected)"
+        echo "Component '${COMPONENT_NAME}' matches the last push — nothing sent to the platform."
+        echo "No new version was created. Re-run with --force to push anyway."
         exit 0
       fi
     fi
@@ -91,8 +117,9 @@ if [[ -n "$sync_branch" && -z "$BRANCH" ]]; then
   fi
 fi
 
-# Prepare push body — inject branch if needed
-push_body=$(cat "$FILE_PATH")
+# Stamp componentId onto the root so the body matches the URL ID (platform rejects a mismatch).
+push_body=$(set_root_component_id "$component_id" < "$FILE_PATH")
+
 if [[ -n "$BRANCH_ID" ]]; then
   push_body=$(inject_branch_id "$push_body" "$BRANCH_ID")
   echo "Pushing component '${COMPONENT_NAME}' (${component_id}) to branch ${BRANCH:-$BRANCH_ID}"
@@ -103,10 +130,15 @@ fi
 # --- Push to platform ---
 url="$(build_api_url "Component/${component_id}")"
 
+# Body via tempfile + --data-binary; inline -d "$body" overflows ARG_MAX (small on MinGW) on large components.
+body_file="$(mktemp)"
+trap 'rm -f "$body_file"' EXIT
+printf '%s' "$push_body" > "$body_file"
+
 boomi_api -X POST "$url" \
   -H "Accept: application/xml" \
   -H "Content-Type: application/xml" \
-  -d "$push_body"
+  --data-binary "@${body_file}"
 
 if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" && "$RESPONSE_CODE" != "204" ]]; then
   log_activity "component-push" "fail" "$RESPONSE_CODE" \
@@ -114,14 +146,25 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" && "$RESPONSE_CODE"
        --arg file "$FILE_PATH" --arg err "${RESPONSE_BODY:0:500}" \
        '{component_name: $name, component_id: $id, file_path: $file, error: $err}')"
   echo "ERROR: Push failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 # --- Update sync state ---
 write_sync_state "$component_id" "$FILE_PATH" "$current_hash" "$BRANCH_ID"
 
+# Read the platform-assigned version from the returned Component root element.
+# Scope to the root tag so the prolog's version="1.0" isn't matched.
+new_version=$(printf '%s' "$RESPONSE_BODY" | tr '\n' ' ' \
+  | grep -o '<[a-zA-Z]*:\{0,1\}Component[^>]*>' | head -1 \
+  | xml_attr "version" || true)
+
 log_activity "component-push" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
-     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-main}" \
-     '{component_name: $name, component_id: $id, file_path: $file, branch: $branch}')"
-echo "SUCCESS: Pushed component '${COMPONENT_NAME}'"
+     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-main}" --arg ver "$new_version" \
+     '{component_name: $name, component_id: $id, file_path: $file, branch: $branch, version: (if $ver == "" then null else $ver end)}')"
+
+if [[ -n "$new_version" ]]; then
+  echo "SUCCESS: Pushed component '${COMPONENT_NAME}' — now version ${new_version}"
+else
+  echo "SUCCESS: Pushed component '${COMPONENT_NAME}'"
+fi

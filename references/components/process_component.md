@@ -2,6 +2,7 @@
 
 ## Contents
 - Critical Requirements
+- Process Options
 - Shape Positioning & Connections
 - Reference Process XML
 
@@ -18,7 +19,21 @@
 
 ## Process Options
 
-Process options are attributes on the `<process>` XML element that control execution behavior, logging, and performance. They must be set correctly based on the start step configuration.
+Process options are attributes on the `<process>` XML element, set via the **Process Options** dialog (the **Options** link on the build canvas, or the **Process Mode** link in the Start step dialog). Platform output serializes all seven attributes on every process, in alphabetical order, regardless of mode.
+
+### Process Options Dialog ⇄ XML Attribute
+
+| Process Options dialog setting | XML attribute | Values |
+|---|---|---|
+| Process Mode | `workload` | `general` \| `bridge` \| `low_latency` |
+| Allow Simultaneous Executions | `allowSimultaneous` | `true` \| `false` |
+| Capture Run Dates | `updateRunDates` | `true` \| `false` |
+| Auto Capture Errors/Warnings to Local Log | `enableUserLog` | `true` \| `false` |
+| Purge Data Immediately | `purgeDataImmediately` | `true` \| `false` |
+| Only Generate Process Log on Error | `processLogOnErrorOnly` | `true` \| `false` |
+| Stop if No Documents | `stopProcessingIfZeroDocuments` | `true` \| `false` |
+
+> When authoring process XML, the seven option attributes are independent — set each one explicitly. `workload` carries the Process Mode and does **not** drive the others: a `bridge` or `low_latency` process is not given different `allowSimultaneous`/`updateRunDates`/etc. values by virtue of its mode. (In the GUI, choosing a mode pops a yellow prompt *recommending* certain values, but those are recommendations only — they reach the XML solely if accepted.)
 
 ### Decision Table: Recommended Process Options by Start Step Type
 
@@ -32,17 +47,19 @@ Process options are attributes on the `<process>` XML element that control execu
 | MCP Server (`connectorType="officialboomi-X3979C-mcp-prod"`) | `true` | `false` | `true` |
 | Event Streams Listen (`connectorType="officialboomi-X3979C-events-prod"`) | `true` | `false` | `false` |
 
-**All types**: `workload="general"`, `processLogOnErrorOnly="false"`, `purgeDataImmediately="false"`
+These two recommendations follow Boomi's "recommended changes" guidance: turn off Allow Simultaneous Executions for regular-connector/No Data start steps, turn it on for any listener (`actionType="Listen"`) or Trading Partner start; turn off Capture Run Dates for passthrough, listener, and Trading Partner start steps.
+
+**All types**: set `processLogOnErrorOnly="false"`, `purgeDataImmediately="false"`, and `stopProcessingIfZeroDocuments="true"` (the GUI default for new processes — match it when building over the API). Use `workload="general"` unless a listener-only mode (Bridge / Low Latency) is required. These options are set independently of start-step type.
 
 #### Override Guidance
 
-When a user requests values that differ from the table above: state the recommended value, explain the implication of deviation, then proceed with the requested values. Example: if a user wants `allowSimultaneous="false"` on a WSS listener, explain that concurrent HTTP requests will receive HTTP 500 when one execution is already in progress, then set the value as requested.
+When a user requests values that differ from the table above: state the recommended value, explain the implication of deviation, then proceed with the requested values. Example: if a user wants `allowSimultaneous="false"` on a WSS listener, explain that a concurrent HTTP request will be rejected with HTTP 503 (body: `Process is already running, executionId <id>`) while one execution is already in progress, then set the value as requested.
 
 ### Option Details
 
 #### `allowSimultaneous`
 Controls whether multiple instances of the process can run concurrently.
-- `true`: Multiple instances execute in parallel. **Required for all listener types** — without it, concurrent requests queue or fail (WSS returns HTTP 500).
+- `true`: Multiple instances execute in parallel. **Required for all listener types** — without it, a concurrent request is rejected outright (not queued). For a WSS listener the overlapping request fast-fails with **HTTP 503**, body `Process is already running, executionId <id>`, while the in-progress execution continues.
 - `false`: Only one instance runs at a time. Appropriate for scheduled/batch processes.
 
 Not recommended for processes using persisted process properties.
@@ -52,13 +69,13 @@ Records last run date and last successful run date. These dates can be reference
 - `true`: Useful for scheduled processes that need incremental pulls.
 - `false`: Recommended for listeners and subprocesses — run date tracking has a performance cost per execution.
 
-#### `enableUserLog`
-Enables user-defined logging within the process.
-- `true`: Recommended for MCP Server processes (debugging AI tool invocations).
-- `false`: Default for most process types.
+#### `enableUserLog` (Auto Capture Errors/Warnings to Local Log)
+When `true`, the process's log files are written to the runtime's local execution-history directory (default: a zip under `<runtime_installation_directory>/execution/history/<process_execution_date>`). Off by default.
+- `true`: Retains a local copy of process logs on the runtime — useful for runtime-side troubleshooting. Recommended for MCP Server processes.
+- `false`: Default. No local execution-history log capture.
 
-#### `processLogOnErrorOnly`
-When `true`, process logs are only generated for executions that encounter errors. Only meaningful in Low Latency mode. Set to `false` for General workload.
+#### `processLogOnErrorOnly` (Only Generate Process Log on Error)
+When `true`, the process log is generated only for executions that encounter an error. Off by default. Only enable in Low Latency mode when error visibility must still be captured.
 
 #### `purgeDataImmediately`
 Purges processed documents and temporary data immediately after each execution. Does not purge process or document logs.
@@ -66,6 +83,9 @@ Purges processed documents and temporary data immediately after each execution. 
 - `true`: Use when processing high volumes of sensitive data that should not persist.
 
 Runtime-level Purge Data Immediately overrides this setting when enabled.
+
+#### `stopProcessingIfZeroDocuments` (Stop if No Documents)
+When `true`, the process halts at a step that produces zero documents rather than continuing downstream. On by default for new processes created in the GUI; processes created or copied via the API may serialize `false`. When building over the API, follow the GUI default of `true`. This applies only to the individual process — it does not propagate to called subprocesses, which must set their own value.
 
 #### `workload` (Process Mode)
 - `general`: Default. Full execution history, logs, and document payloads captured. Works with any start step type.
@@ -86,22 +106,32 @@ When a process calls a subprocess:
 
 #### Scheduled / No Data Process
 ```xml
-<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="true" workload="general">
+<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="true" workload="general">
 ```
 
 #### Subprocess (Data Passthrough)
 ```xml
-<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
 ```
 
 #### Listener Process (WSS, FSS, Event Streams)
 ```xml
-<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
 ```
 
 #### MCP Server Process
 ```xml
-<process allowSimultaneous="true" enableUserLog="true" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="true" enableUserLog="true" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
+```
+
+#### Bridge Mode Listener
+```xml
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="bridge">
+```
+
+#### Low Latency Mode Listener
+```xml
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="low_latency">
 ```
 
 ## Shape Positioning & Connections
@@ -133,7 +163,7 @@ Shapes follow a sequential naming pattern: `shape1`, `shape2`, etc. The name is 
   <bns:encryptedValues/>
   <bns:description/>
   <bns:object>
-    <process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+    <process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
       <shapes>
         <shape image="start" name="shape1" shapetype="start" userlabel="" x="48.0" y="46.0">
           <configuration>

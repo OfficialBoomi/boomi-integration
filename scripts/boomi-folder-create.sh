@@ -66,13 +66,13 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
        --arg err "${RESPONSE_BODY:0:500}" \
        '{folder_name: $name, parent_id: $parent, error: $err}')"
   echo "ERROR: Folder creation failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 folder_id=$(echo "$RESPONSE_BODY" | jq -r '.id // empty')
 if [[ -z "$folder_id" ]]; then
   echo "ERROR: No folder ID in response" >&2
-  exit 0
+  exit 1
 fi
 
 log_activity "folder-create" "success" "$RESPONSE_CODE" \

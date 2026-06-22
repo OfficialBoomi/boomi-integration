@@ -100,10 +100,11 @@ Process step populates those parameters with dynamic values:
 - Operation `key="lat"` **must match** Process Step `childKey="lat"`
 - Process step **overrides** operation values by exact name matching
 - Parameters not specified in dynamic properties keep their operation defaults
+- The parent `key` **must name a real operation `<field id>`** (`path`, `queryParameters`, `requestHeaders`, …). A `key` that matches no field id — e.g. the intuitive-but-wrong `key="headers"` — deploys with no warning, then throws a `NullPointerException` and **ERRORs the execution** (not a deploy warning, not a silently dropped header).
 
 ### Common Dynamic Property Types:
 - **path**: URL path segments (a dynamic path can be set into a DDP prior to the step, and then referenced dynamically. The {reference} format does NOT work directly within the step configuration)
-- **headers**: Custom headers
+- **requestHeaders**: Custom headers — the `key` is `requestHeaders` (matching the operation's `<field id="requestHeaders">`)
 - **queryParameters**: URL query string parameters
 - **requestBody**: For POST/PUT operations
 

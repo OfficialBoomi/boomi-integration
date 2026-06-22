@@ -51,7 +51,7 @@ if [[ "$RESPONSE_CODE" != "200" ]]; then
     "$(jq -cn --arg id "$COMPONENT_ID" --arg src "$SOURCE_VERSION" --arg tgt "$TARGET_VERSION" --arg err "${RESPONSE_BODY:0:500}" \
        '{component_id: $id, source: $src, target: $tgt, error: $err}')"
   echo "ERROR: Diff request failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 # --- Output raw JSON response ---

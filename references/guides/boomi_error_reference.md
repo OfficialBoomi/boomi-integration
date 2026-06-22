@@ -43,10 +43,11 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | MANDATORY_ELEMENT_MISSING on map output with identity fields | #25 (Identity Field Mandatory) |
 | Record silently missing from multi-record flat file output | #26 (Identity Value Trimming) |
 | "No data produced from map" on data positioned profile | #26 (Identity Value Trimming) |
-| HTTP 500 on concurrent listener requests / listener queuing | #27 (Listener Process Options) |
+| HTTP 503 on concurrent listener requests / listener queuing | #27 (Listener Process Options) |
 | White screen opening SF operation in GUI | #28 (SF Operation Missing Sorts Element) |
 | Push rejected — "locked by another user" | #29 (Component Locking) |
 | Groovy compile error in ProcessLog after clean push/deploy | #30 (Groovy Runtime Compilation) |
+| Connection override ignored / prod uses wrong host despite useDefault=false | #31 (Inert Override Missing xpath) |
 
 ---
 
@@ -81,6 +82,10 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 25 | Identity Field mandatory="true" on Map Output | High | Runtime error - MANDATORY_ELEMENT_MISSING |
 | 26 | Identity Value Trimming in Data Positioned Profiles | High | Silent - record missing from output / ERROR if only record |
 | 27 | Listener Process with Default Process Options | High | Silent - queuing/rejection of concurrent requests |
+| 28 | SF Operation Missing Sorts Element | High | GUI white screen opening the operation editor |
+| 29 | Component Locking Blocks All API Updates | Medium | Push fails - HTTP 400 component locked |
+| 30 | Groovy Runtime Compilation | Medium | Runtime error - surfaced only in ProcessLog |
+| 31 | Connection-Override Field Missing xpath | High | Silent - override ignored, baked-in default used |
 
 ---
 
@@ -1444,7 +1449,7 @@ The platform stores exactly what is pushed. An empty processOverrides element is
     <Overrides xmlns="">
       <Connections>
         <ConnectionOverride id="c7d489dc-...">
-          <field id="url" label="URL" overrideable="true"/>
+          <field id="url" label="URL" overrideable="true" xpath="HttpSettings/@url"/>
         </ConnectionOverride>
       </Connections>
       <Properties>
@@ -1609,7 +1614,7 @@ If a specific record type is missing from output but others parse correctly, che
 
 ### The Problem
 
-Listener processes (WSS, FSS, MCP Server, Event Streams) created with default process options have `allowSimultaneous="false"`, which causes concurrent requests to queue or fail. WSS processes return HTTP 500 to concurrent callers. Other listener types queue or reject subsequent triggers while one execution is in progress.
+Listener processes (WSS, FSS, MCP Server, Event Streams) created with default process options have `allowSimultaneous="false"`, which causes concurrent requests to queue or fail. WSS processes return HTTP 503 to concurrent callers. Other listener types queue or reject subsequent triggers while one execution is in progress.
 
 ### Why It Happens
 
@@ -1627,7 +1632,7 @@ New processes default to `allowSimultaneous="false"` and `updateRunDates="true"`
     </shape>
   </shapes>
 </process>
-<!-- Result: Second concurrent HTTP request gets HTTP 500; updateRunDates adds per-execution overhead -->
+<!-- Result: Second concurrent HTTP request gets HTTP 503; updateRunDates adds per-execution overhead -->
 ```
 
 ### Correct Pattern - Listener with Recommended Options
@@ -1766,5 +1771,58 @@ After any change to a `<dataprocessscript>` body, execute the process, then veri
 
 - `references/steps/data_process_groovy_step.md` — Data Process Groovy step reference
 - Issue #17 documents a sibling "deploy-clean, runtime-fails" pattern for the same step type (missing `language`/`useCache`)
+
+---
+
+## Issue #31: Connection-Override Field Missing `xpath` Is Silently Inert
+
+**Frequency:** High (any hand-authored or round-tripped `<bns:processOverrides>` connection override)
+**Detection:** Silent — no deploy error, no execution error; the connector simply uses the wrong value
+
+### The Problem
+
+A connection-override `<field>` declared `overrideable="true"` but missing its connector-specific `xpath` attribute is *declared but inert*. The `xpath` is the binding that injects the environment-extension value onto the target attribute in the connection XML; without it the value is never applied.
+
+The defect is dangerous because everything *looks* configured:
+- The field shows as overrideable in the Boomi GUI extensions tab.
+- The extensions GET (`boomi-extensions.sh get`) reports the field with `useDefault=false` and the set value.
+- There is no deploy warning and no execution error.
+
+At request time, the connector silently falls back to the connection component's baked-in default. It is **environment-masked** — it works on any environment where the connection's default already equals the desired value, and only fails where they differ (the classic "works in test, fails in prod"). It is also **redeploy-proof**: the broken declaration lives in the component, so redeploying reships it. Other override sections (e.g. `DefinedProcessPropertyOverrides`) bind independently and are unaffected, so credentials can resolve from extensions while a connection field does not — sending real credentials to the wrong host.
+
+### Wrong Pattern — Declared but Inert
+
+```xml
+<ConnectionOverride id="241f2935-...">
+  <field id="url" label="URL" overrideable="true"/>
+</ConnectionOverride>
+<!-- Override appears active in GUI and API, but the URL extension is ignored at runtime -->
+```
+
+### Correct Pattern — `xpath` Binds the Override
+
+```xml
+<ConnectionOverride id="241f2935-...">
+  <field id="url" label="URL" overrideable="true" xpath="HttpSettings/@url"/>
+</ConnectionOverride>
+<!-- The URL extension value is injected into HttpSettings/@url at runtime -->
+```
+
+Emit the complete canonical `<ConnectionOverride>` block the platform generates for the connector type — every field enumerated, each with its own `xpath` — rather than a hand-picked subset. See references/components/process_extensions.md § Connection Overrides for how to obtain it.
+
+### Detection
+
+Flag any self-closing overrideable `<field>` that has no `xpath`:
+
+```
+grep -oE '<field id="[^"]*" label="[^"]*" overrideable="true"/>' process.xml
+```
+
+Any match is a declared-but-inert override (a correctly bound field ends with `xpath="..."/>`, not `overrideable="true"/>`).
+
+### Related
+
+- `references/components/process_extensions.md` — Connection and Operation Overrides
+- Issue #23 documents the adjacent failure where an emptied `<bns:processOverrides>` hides extension declarations entirely
 
 ---

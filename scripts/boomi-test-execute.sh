@@ -84,13 +84,13 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
        --arg err "${RESPONSE_BODY:0:500}" \
        '{process_id: $pid, atom_id: $atom, error: $err}')"
   echo "ERROR: Execution failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 request_id=$(echo "$RESPONSE_BODY" | xml_attr "requestId")
 if [[ -z "$request_id" ]]; then
   echo "ERROR: No requestId in response" >&2
-  exit 0
+  exit 1
 fi
 
 echo "Execution started: requestId=${request_id}"
@@ -129,13 +129,13 @@ for (( i=1; i<=max_attempts; i++ )); do
     sleep "$poll_interval"
   else
     echo "ERROR: Polling failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-    exit 0
+    exit 1
   fi
 done
 
 if [[ -z "$execution_xml" ]]; then
   echo "ERROR: Polling timed out after ${max_attempts} attempts" >&2
-  exit 0
+  exit 1
 fi
 
 # --- Parse execution record (sed — no grep -P, works on macOS) ---

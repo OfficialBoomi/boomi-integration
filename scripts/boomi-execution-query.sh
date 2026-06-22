@@ -60,13 +60,13 @@ if [[ -n "$EXECUTION_ID" && "$FETCH_LOGS" == "true" ]]; then
       sleep 5
     else
       echo "ERROR: ProcessLog request failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-      exit 0
+      exit 1
     fi
   done
 
   if [[ -z "$download_url" ]]; then
     echo "ERROR: Could not obtain log download URL" >&2
-    exit 0
+    exit 1
   fi
 
   echo "Downloading log archive..."
@@ -167,7 +167,7 @@ boomi_api -X POST "$query_url" \
 
 if [[ "$RESPONSE_CODE" != "200" ]]; then
   echo "ERROR: Query failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 # --- Parse and display results ---

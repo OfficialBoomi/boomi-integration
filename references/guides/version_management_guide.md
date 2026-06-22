@@ -12,7 +12,7 @@ Component versioning is managed server-side by the Boomi platform. Every push (u
 
 ## Component Versioning Model
 
-Every push (update) increments the component's `version` attribute by 1. The platform controls this — the `version` value in pushed XML is ignored.
+Every push (update) increments the component's `version` attribute by 1 — even when the pushed content is identical (the platform does not deduplicate). The platform controls this; the `version` value in pushed XML is ignored.
 
 | Attribute | Behavior |
 |-----------|----------|

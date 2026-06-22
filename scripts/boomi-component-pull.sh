@@ -58,7 +58,7 @@ if [[ "$RESPONSE_CODE" != "200" ]]; then
     "$(jq -cn --arg id "$COMPONENT_ID" --arg err "$(head -c 500 "$tmpfile")" \
        '{component_id: $id, error: $err}')"
   echo "ERROR: Failed to get component (HTTP ${RESPONSE_CODE}): $(head -c 500 "$tmpfile")" >&2
-  exit 0
+  exit 1
 fi
 
 # --- Extract name and type (awk exits after first match — safe on single-line XML) ---

@@ -23,14 +23,18 @@ done
 
 # --- List environments ---
 if $LIST_ENVS; then
-  url="$(build_api_url "Environment")"
+  url="$(build_api_url "Environment/query" false)"
   echo "Listing environments..."
 
-  boomi_api -X GET "$url" -H "Accept: application/json"
+  # List all: POST query with empty QueryFilter.
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d '{"QueryFilter":{}}'
 
   if [[ "$RESPONSE_CODE" != "200" ]]; then
     echo "ERROR: Failed to list environments (HTTP ${RESPONSE_CODE})" >&2
-    exit 0
+    exit 1
   fi
 
   echo "$RESPONSE_BODY" | jq -r '.result[]? | "Environment: \(.name) (ID: \(.id))"'
@@ -170,13 +174,13 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
        --arg err "${RESPONSE_BODY:0:500}" \
        '{component_name: $name, component_id: $id, error: $err}')"
   echo "ERROR: Packaging failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 package_id=$(echo "$RESPONSE_BODY" | jq -r '.packageId // empty')
 if [[ -z "$package_id" ]]; then
   echo "ERROR: No packageId in PackagedComponent response" >&2
-  exit 0
+  exit 1
 fi
 
 echo "Packaged as ${package_id}"
@@ -214,7 +218,7 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
        --arg env "$env_id" --arg err "${RESPONSE_BODY:0:500}" \
        '{component_name: $name, component_id: $id, environment_id: $env, error: $err}')"
   echo "ERROR: Deployment failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 log_activity "deploy" "success" "$RESPONSE_CODE" \

@@ -222,7 +222,7 @@ read_sync_branch() {
 
   for sf in "${sync_dir}/${state_name}.json" "${sync_dir}/${component_name}.json"; do
     if [[ -f "$sf" ]]; then
-      jq -r '.branch_id // empty' "$sf" 2>/dev/null
+      jq -r '.branch_id // empty' < "$sf" 2>/dev/null
       return 0
     fi
   done
@@ -235,7 +235,36 @@ read_sync_branch() {
 #    or: echo "$xml" | xml_attr "componentId"
 xml_attr() {
   local attr="$1"
-  grep -o -m 1 "${attr}=\"[^\"]*\"" | sed "s/${attr}=\"//;s/\"//"
+  # || true: a no-match must yield empty, not exit 1, under set -euo pipefail
+  { grep -o -m 1 "${attr}=\"[^\"]*\"" || true; } | sed "s/${attr}=\"//;s/\"//"
+}
+
+# Usage: set_root_component_id "<id-or-empty>" < file.xml
+set_root_component_id() {
+  awk -v id="$1" '
+    BEGIN { done = 0; intag = 0 }
+    {
+      if (!done) {
+        if (!intag && match($0, /<bns:Component|<Component/)) intag = 1
+        if (intag) {
+          gt = index($0, ">")
+          ci = match($0, /componentId="[^"]*"/)
+          if (ci > 0 && (gt == 0 || ci < gt)) {
+            # componentId belongs to the root open tag — replace its value
+            $0 = substr($0, 1, ci - 1) "componentId=\"" id "\"" substr($0, ci + RLENGTH)
+            done = 1; intag = 0
+          } else if (gt > 0) {
+            # root open tag closes here with no componentId — insert before the close
+            ins = gt
+            if (substr($0, gt - 1, 1) == "/") ins = gt - 1
+            $0 = substr($0, 1, ins - 1) " componentId=\"" id "\"" substr($0, ins)
+            done = 1; intag = 0
+          }
+        }
+      }
+      print
+    }
+  '
 }
 
 # Portable in-place sed (macOS vs GNU)
@@ -278,7 +307,7 @@ read_component_id() {
   for sf in "${sync_dir}/${state_name}.json" "${sync_dir}/${component_name}.json"; do
     if [[ -f "$sf" ]]; then
       local cid
-      cid=$(jq -r '.component_id // empty' "$sf" 2>/dev/null)
+      cid=$(jq -r '.component_id // empty' < "$sf" 2>/dev/null)
       if [[ -n "$cid" ]]; then
         echo "$cid"
         return 0

@@ -86,7 +86,7 @@ if [[ "$RESPONSE_CODE" != "200" ]]; then
     "$(jq -cn --arg id "$COMPONENT_ID" --arg err "${RESPONSE_BODY:0:500}" \
        '{component_id: $id, error: $err}')"
   echo "ERROR: Query failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-  exit 0
+  exit 1
 fi
 
 # Accumulate results across pages

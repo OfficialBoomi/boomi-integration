@@ -105,7 +105,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   └── edi_sap_patterns.md          # Read when: EDI ↔ SAP IDoc integration — IDoc segment hierarchy/cardinality, qualifier-driven routing (DTM/NAD → IDoc fields), composite decomposition, cross-reference table design, Z-segment handling
 │   │
 │   ├── components/              # Component XML reference documentation
-│   │   ├── process_component.md              # Use when: creating/editing process XML - defines shape positioning, dragpoint connections, and canvas structure
+│   │   ├── process_component.md              # Use when: creating/editing process XML - shape positioning, dragpoint connections, canvas structure, and process options (Process Mode/workload, allowSimultaneous, updateRunDates, enableUserLog, purgeDataImmediately, processLogOnErrorOnly, stopProcessingIfZeroDocuments)
 │   │   ├── json_profile_component.md         # Use when: defining JSON document schemas for validation, accessing JSON fields in Maps/Set Properties, consolidating array elements
 │   │   ├── xml_profile_component.md          # Use when: defining XML document schemas with namespaces, accessing XML elements/attributes in Maps/Set Properties
 │   │   ├── flat_file_profile_component.md    # Use when: defining CSV/delimited file schemas, creating placeholder profiles for Map component sources
