@@ -239,6 +239,14 @@ Enables modular design by routing documents into subprocesses. All subprocess br
 
 **Critical design requirement:** Subprocess MUST use passthrough start configuration to receive parent documents.
 
+### Process Route Steps
+Calls a separate Process Route component that dynamically selects which subprocess to run from a route key resolved at execution time. **Default to a plain Process Call** for ordinary modular/shared logic — reach for a Process Route only when you genuinely need the dynamic, independently-deployable indirection, because it costs portability and deployment simplicity:
+- **Not a dependent component.** The parent, the Process Route component, and **every** subprocess must each be deployed independently — deploying the parent bundles neither. (Contrast Process Call, where subprocesses ride along with the parent.)
+- **Reference prefix is mandatory and silently fails.** The step references the component as `processRouteId="resource::rout:<guid>"`; a bare GUID is accepted on push and deploy but fails only at execution.
+- **Distribution-limited and edition-gated.** Cannot be shared via process library, integration pack, or Bundle; Professional/Enterprise only.
+
+See `steps/process_route_step.md` and `components/process_route_component.md`.
+
 ### Try-Catch Steps
 Error handling with dual paths: Try for normal processing, Catch for errors. Place directly after Start step for process-wide error handling, or wrap specific operations that may fail.
 
@@ -308,6 +316,7 @@ Key patterns that fail silently without errors:
 - **Quote escaping**: Message/Notify variable substitution failures - MOST COMMON BUG
 - **Connector parameters override document**: Document content ignored
 - **Parent-subprocess deployments**: Updates not reflected until parent redeployed
+- **Process Route reference prefix**: A `processRouteId` missing the `resource::rout:` prefix is accepted on push and deploy, failing only at execution
 - **XML schema mistakes**: Common validation errors
 
 ## Naming Conventions

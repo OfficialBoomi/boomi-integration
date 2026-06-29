@@ -70,13 +70,21 @@ The subprocess MUST use a **data passthrough** start configuration to receive do
 
 ### returnpaths
 - Each `<returnpaths>` child defines one return branch
-- `childShapeName`: Must match the `name` attribute of a return document shape in subprocess
+- `childShapeName`: Must equal a subprocess `returndocuments` shape's `name` (see [Return Path Mapping](#return-path-mapping))
+- `returnLabel`: Optional, display-only — a free-form branch label (defaults to the subprocess return shape's `label`). No effect on routing; the GUI populates it, XML authoring may omit it
 - Creates corresponding dragpoint with matching `identifier`
 
 ## Return Path Mapping
-The subprocess return shape name becomes the identifier in the parent's dragpoint:
-- Subprocess has: `<shape name="shape2" shapetype="returndocuments">`
-- Parent process call has: `<dragpoint identifier="shape2">`
+`childShapeName` must equal the **`name`** of a `returndocuments` shape in the subprocess — not its `label`/`userlabel`. Each `childShapeName` needs a matching dragpoint `identifier`.
+- Subprocess: `<shape name="shape2" shapetype="returndocuments">`
+- Parent: `<returnpaths childShapeName="shape2"/>` + `<dragpoint identifier="shape2">`
+
+Find the subprocess's return shape names before wiring:
+```bash
+grep 'shapetype="returndocuments"' <subprocess>.xml
+```
+
+**A mismatch routes nothing, silently.** A `childShapeName` with no matching subprocess return shape delivers 0 documents — the process completes with no error, and the mismatch is not caught at save time (in the GUI the branch shows an unresolved `+` stub). The only signal is a WARNING in the parent's process log: `Ignoring returned documents for unknown shape <name>`. If a downstream branch receives no documents, verify the name match.
 
 ## Common Pattern: Listener with Testable Logic
 ```
@@ -93,4 +101,5 @@ This pattern enables test mode for the business logic while maintaining the list
 - Subprocess must have passthrough start to receive parent data
 - Return shape names in subprocess display in the parent process, which is helpful for visual editing
 - All subprocess branches complete before returning to parent
+- A DPP set inside a `wait="true"` subprocess persists into the parent and is readable after the call returns (read with `valueType="process"`). A side-effect subprocess can return its result via a DPP instead of a returned document — e.g. a sub that returns only on error, with the parent reading the DPP in a later step
 - A process can call itself recursively via Process Call. When doing this, always include a recursion depth guard (e.g. a DPP counter checked by a Decision step) to cap depth at no more than 5 levels and prevent runaway processes

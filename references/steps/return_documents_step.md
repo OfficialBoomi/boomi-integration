@@ -48,6 +48,6 @@ Returns documents to the calling context - either a parent process or external c
 
 ## Usage Notes
 - Multiple return document steps in a subprocess create multiple return branches in parent
-- The `label` value (e.g., "Successfully processed") becomes the branch identifier displayed in parent process call step
+- The `label` is only the display text shown on the parent's branch — the parent routes by the return shape's `name` (matched by `childShapeName`), not the `label`
 - No dragpoints - this is always a terminal step
 - Documents retain their properties (DDPs) when returned

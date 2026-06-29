@@ -106,6 +106,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │
 │   ├── components/              # Component XML reference documentation
 │   │   ├── process_component.md              # Use when: creating/editing process XML - shape positioning, dragpoint connections, canvas structure, and process options (Process Mode/workload, allowSimultaneous, updateRunDates, enableUserLog, purgeDataImmediately, processLogOnErrorOnly, stopProcessingIfZeroDocuments)
+│   │   ├── process_route_component.md         # Use when: building the routing table for a Process Route step - mapping route keys to subprocess GUIDs and return paths to subprocess Return Documents shapes. Pairs with steps/process_route_step.md.
 │   │   ├── json_profile_component.md         # Use when: defining JSON document schemas for validation, accessing JSON fields in Maps/Set Properties, consolidating array elements
 │   │   ├── xml_profile_component.md          # Use when: defining XML document schemas with namespaces, accessing XML elements/attributes in Maps/Set Properties
 │   │   ├── flat_file_profile_component.md    # Use when: defining CSV/delimited file schemas, creating placeholder profiles for Map component sources
@@ -171,6 +172,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows
 │   │   ├── flow_control_step.md # Batching and parallel fiber execution. Use when: serializing downstream steps per-document, splitting documents into batches, or spreading documents across parallel threads/processes
 │   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches
+│   │   ├── process_route_step.md # Use when: dynamically selecting which subprocess runs from a route key resolved at execution time (vs a static Process Call). Requires a Process Route component, the resource::rout: reference prefix, and independent deploy of every participant.
 │   │   ├── try_catch_step.md    # Error handling and exception routing. Use when: wrapping operations that may fail, implementing process-wide error handling
 │   │   ├── exception_step.md   # Terminate execution with error message. Use when: failing a document or process on validation failure, unhappy-path exits from Decision/Route
 │   │   ├── notify_step.md       # Debug logging with variable substitution. Use when: debugging execution flow, logging property values, logging document payloads at certain points in a process
