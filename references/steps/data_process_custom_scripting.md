@@ -1,4 +1,4 @@
-# Data Process Step: Custom Scripting (Groovy) Reference
+# Data Process Step: Custom Scripting Reference
 ## Contents
 - Purpose
 - Development Philosophy
@@ -7,11 +7,13 @@
 - Working with Properties
 - Complete Examples
 - XML Configuration
+- Scripting Languages
+- Referencing a Process Script Component
 - Critical Rules and Gotchas
 - Common Patterns Reference
 
 ## Purpose
-Custom Scripting (Process Type 12) enables inline Groovy code execution for document manipulation, property management, and transformations that cannot be achieved through standard Boomi components.
+Custom Scripting is one of the Data Process step's processing steps (Process Type 12) — not a standalone process step; it is configured inside a Data Process shape (see `data_process_step.md`). It executes a script for document manipulation, property management, and transformations that cannot be achieved through standard Boomi components. The script can be written **inline** in the step or stored in a **reusable Process Script component** that the step references (see Referencing a Process Script Component). Either way it may be Groovy (1.5 or 2.4) or JavaScript — see Scripting Languages below. The examples in this reference are Groovy (the default); the `dataContext` contract is identical in every language.
 
 **Groovy scripting is a last resort.** A core Boomi value proposition is that integrations are manageable by humans through the platform UI. Native components (Maps, Decisions, Set Properties, Message steps) are visible, configurable, and debuggable in the GUI. Scripts are opaque — only the original author can maintain them. Always use native Boomi components first, even when scripting would be faster to write.
 
@@ -22,6 +24,8 @@ Custom Scripting (Process Type 12) enables inline Groovy code execution for docu
 - Document manipulation that no Data Process type supports
 
 **Groovy is sandboxed.** Scripts cannot make external network calls (HTTP, HTTPS, sockets). For any external communication, use a connector step (REST, HTTP, etc.). Groovy is strictly for in-process data manipulation: parsing, transforming, property management.
+
+**Scripts cannot reference other Boomi components** such as connections, profiles, or maps — they operate only on the raw document streams and properties exposed through `dataContext`. To use those components, build them as their own steps in the process.
 
 **Before writing any Groovy, exhaust these alternatives:**
 1. Map step for structured transformations (even complex ones)
@@ -367,11 +371,44 @@ ExecutionUtil.setDynamicProcessProperty("DPP_COUNTER", String.valueOf(counter), 
 </step>
 ```
 
-**Configuration attributes (REQUIRED):**
-- `language="groovy2"`: Groovy 2.4 runtime (REQUIRED - without this, runtime fails with "Failed loading script engine null")
-- `useCache="true"`: Enable script compilation caching (REQUIRED for performance)
+**Configuration attributes:**
+- `language` (**required**): script engine token — `groovy2` (Groovy 2.4, default), `groovy` (Groovy 1.5), `javascript` (JavaScript). See Scripting Languages below. Without it, runtime fails with "Failed loading script engine null".
+- `useCache="true"` (**recommended**): script compilation caching flag. Not required for execution — a step runs to completion whether `useCache` is `"true"`, `"false"`, or omitted — but set `"true"` to mirror the platform default.
 
-**Critical:** Both attributes are mandatory. Missing `language` attribute causes cryptic runtime error with no design-time warning.
+## Scripting Languages
+The `language` attribute on an **inline** `<dataprocessscript>` selects the engine. The engine actually used is echoed in the process execution log as `[1] Scripting: <token>`.
+
+| GUI label | `language` token(s), inline |
+|-----------|-----------------------------|
+| Groovy 2.4 | `groovy2` |
+| Groovy 1.5 | `groovy` |
+| JavaScript | `javascript` |
+
+- **Default to `groovy2`** — it matches the rest of the skill's scripting and the examples above. Avoid Groovy 1.5 (`groovy`) for new work.
+- The token must match the source language: JavaScript source under `language="groovy"` fails at runtime with a Groovy `MultipleCompilationErrorsException` (`status=ERROR`, no output document). The runtime logs a `Script compilation failed, falling back to evaluated mode` WARNING and recompiles once first — this is not a recovery; the execution still ends in ERROR.
+- JavaScript runs on the Nashorn engine: access Java classes via `Packages`/`importClass`, and `class` declarations are not supported. The `dataContext` API is identical to Groovy.
+
+## Referencing a Process Script Component
+The script body may live in a standalone, reusable **Process Script component** (`type="script.processing"`) instead of inline — the component-backed alternative, analogous to Map Scripting components. Reference it by adding `useComponent="true"` and `componentId` to `<dataprocessscript>`:
+
+```xml
+<step index="1" key="1" name="Custom Scripting" processtype="12">
+  <dataprocessscript componentId="[SCRIPT_PROCESSING_GUID]" language="groovy2" useCache="true" useComponent="true">
+    <script><![CDATA[
+      import java.util.Properties;
+      import java.io.InputStream;
+      for( int i = 0; i < dataContext.getDataCount(); i++ ) {
+          dataContext.storeStream(dataContext.getStream(i), dataContext.getProperties(i));
+      }
+    ]]></script>
+  </dataprocessscript>
+</step>
+```
+
+- `useComponent="true"` is the switch: the runtime executes the referenced component's script and **ignores the inline `<script>` body**. Keep a valid passthrough placeholder there (a `dataContext` loop that just re-stores each stream).
+- When `useComponent="true"`, the reference's own `language` attribute is **inert** — the referenced component's `language` governs the engine. (When `useComponent="false"`, the reference's `language` governs the inline body.)
+- Choose inline vs. component on reuse: inline for a script used by one step; a Process Script component when the same script is (or may be) shared across steps/processes. See `references/components/process_script_component.md` for the component body, its language tokens, and the build order.
+- **Redeploy after editing the component.** The referenced component is captured at the process's deploy time. After editing a referenced `script.processing` component, redeploy every process that references it, or it keeps running the previously deployed version.
 
 **CDATA is a push-side authoring convenience, not the canonical storage form.** The platform accepts both CDATA-wrapped and entity-escaped `<script>` bodies on push; they are stored identically. On pull, the platform always returns the `<script>` body as entity-escaped plain text (`<` → `&lt;`, `&` → `&amp;`) — the CDATA envelope is stripped regardless of how it was pushed. Tools that pull, edit, and re-push groovy components do not need to re-wrap in CDATA; the pulled form is itself a legal push body.
 

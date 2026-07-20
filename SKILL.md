@@ -115,8 +115,11 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── map_component.md                  # Use when: creating field-to-field transformations between profiles, understanding map generation rules and mapping patterns
 │   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, conditionals, math, lookups
 │   │   ├── map_script_component.md           # Use when: creating a standalone reusable map-scripting component (type="script.mapping", Groovy or JavaScript) and referencing it from a Map's Scripting function instead of an inline script
+│   │   ├── process_script_component.md       # Use when: creating a standalone reusable Process Script component (type="script.processing", Groovy or JavaScript) and referencing it from a Data Process Custom Scripting step via useComponent="true" instead of an inline script
 │   │   ├── rest_connection_component.md      # connectorType: "officialboomi-X3979C-rest-prod". Use when: creating REST API connections - base URLs, authentication patterns, timeouts, connection pooling
 │   │   ├── rest_connector_operation_component.md # Use when: defining REST operations - HTTP methods, resource paths, headers, query parameters, request/response profiles
+│   │   ├── openapi_connection_component.md   # connectorType: "officialboomi-X3979C-opena2-prod". Use when: creating OpenAPI connector connections - spec location (`spec`), base server URL, authentication (NONE/API_KEY/BASIC), API-key location, connection pooling
+│   │   ├── openapi_connector_operation_component.md # Use when: defining OpenAPI operations from an OpenAPI 3.0+ spec (hand-authored or imported) - HTTP method, endpoint path, request/response JSON profiles, path/query/header parameters via cookie metadata + base64-keyed Dynamic Operation Properties
 │   │   ├── http_client_component.md          # connectorType: "http". Use when: working with existing HTTP Client assets, or when the user explicitly requests HTTP Client. Never select HTTP over REST on agent judgment alone
 │   │   ├── database_connection_component.md      # subType: "database" — Database (Legacy). Use when: creating Database (Legacy) connections - host/port/dbname, driver type, connection pooling, write-SQL-to-file. NOT Database V2.
 │   │   ├── databasev2_connection_component.md    # connectorType: "officialboomi-X3979C-dbv2da-prod". Use when: creating database connections - JDBC URLs, drivers, credentials, connection management
@@ -166,7 +169,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── map_step.md          # Data transformation between profiles. Use when: transforming existing structured data between different schemas
 │   │   ├── set_properties_step.md # Variable creation (DDPs/DPPs). Use when: extracting values for later use, building dynamic paths, managing state, setting arbitrary variables
 │   │   ├── data_process_step.md # Document manipulation and custom scripting. Use when: transforming data Maps can't handle, splitting/combining documents, encoding/compression, custom scripted logic
-│   │   ├── data_process_groovy_step.md # Use when: writing Groovy scripts in Data Process steps - development philosophy, dataContext patterns, property management, critical rules
+│   │   ├── data_process_custom_scripting.md # Use when: writing Groovy (1.5/2.4) or JavaScript in Data Process steps, either inline or referencing a reusable Process Script component - development philosophy, dataContext patterns, property management, language tokens, critical rules
 │   │   ├── decision_step.md     # Conditional routing based on comparisons. Use when: implementing if/then logic, routing based on property values or field comparisons
 │   │   ├── route_step.md        # Multi-path conditional routing. Use when: routing documents to 3+ paths based on a value (switch/case), replacing chained decision steps
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows

@@ -32,7 +32,7 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Blank canvas in GUI (JavaScript error) | #14 (Branch numBranches) |
 | NullPointerException at runtime / stack overflow in GUI | #15 (Stop continue Attribute) |
 | Empty action picklist in WSS operation | #16 (WSS actionType) |
-| Script engine null error in Data Process | #17 (Groovy Attributes) |
+| Script engine null error in Data Process | #17 (Script Engine Attributes) |
 | "No document" error with perExecution | #18 (Notify perExecution) |
 | WSS requests hitting wrong process | #19 (Listener Path Collision) |
 | MCP tool schema changes not applied | #20 (MCP Profile/Schema Sync) |
@@ -596,40 +596,40 @@ cvc-enumeration-valid: Value 'setproperties' is not facet-valid
 ## Issue #9: Map Function GUI Requirements
 
 **Frequency:** Low
-**Detection:** GUI rendering error - stack overflow in map editor
+**Detection:** Map editor loads a blank canvas; browser console shows `Maximum call stack size exceeded`
 
 ### The Problem
 
-Map component functions missing required attributes cause stack overflow errors when opening in Boomi GUI map editor.
+A `<FunctionStep>` without `x`/`y` canvas coordinates cannot be rendered by the Boomi map editor — the canvas loads blank and the browser throws a stack-overflow error. API push and process execution are unaffected; the failure is GUI-only, and a single coordinate-less function is enough to trigger it.
 
 ### Wrong Pattern
 
 ```xml
-<functions>
-  <function default="false" functionType="groovy2">
-    <!-- Missing required attributes -->
-    <script>return input1 + input2</script>
-  </function>
-</functions>
+<Functions optimizeExecutionOrder="true">
+  <FunctionStep category="Scripting" key="1" name="Scripting"
+                position="1" type="Scripting">
+    <!-- Missing x/y coordinates -->
+  </FunctionStep>
+</Functions>
 ```
 
 ### Correct Pattern
 
 ```xml
-<functions>
-  <function default="false" functionType="groovy2"
-            cacheEnabled="true" sumEnabled="false"
-            x="100" y="100">
-    <script>return input1 + input2</script>
-  </function>
-</functions>
+<Functions optimizeExecutionOrder="true">
+  <FunctionStep cacheEnabled="true" category="Scripting" key="1" name="Scripting"
+                position="1" sumEnabled="false" type="Scripting" x="10.0" y="10.0">
+    ...
+  </FunctionStep>
+</Functions>
 ```
 
-### Required Attributes
+### Attributes
 
-- `cacheEnabled="true"` - Enable function result caching
-- `sumEnabled="false"` - Disable sum aggregation
-- `x="100"` and `y="100"` - Canvas coordinates for GUI positioning
+- `x` and `y` — required for GUI rendering. Start the first function at `y="10.0"` and increment ~140px per function.
+- `cacheEnabled`/`sumEnabled` — GUI-authored (`true`/`false`), not required for push, execution, or rendering. Emitting them matches what the GUI writes.
+
+See `references/components/map_component_functions.md` for full detail.
 
 ### Additional Consideration
 
@@ -1110,7 +1110,7 @@ See references/steps/start_step.md for complete start step XML reference and WSS
 
 ### The Problem
 
-Data Process Custom Scripting steps missing required `language` and `useCache` attributes deploy successfully to the platform but fail at runtime with cryptic error: "Failed loading script engine null". The XML pushes without validation errors, but execution fails.
+Data Process Custom Scripting steps missing the required `language` attribute deploy successfully to the platform but fail at runtime with cryptic error: "Failed loading script engine null". The XML pushes without validation errors, but execution fails. (The `useCache` attribute is a performance flag, not required for execution — only `language` is load-bearing.)
 
 **Real-World Symptoms:**
 - Process deploys without errors
@@ -1121,7 +1121,7 @@ Data Process Custom Scripting steps missing required `language` and `useCache` a
 
 ### Why It Happens
 
-The platform API accepts `<dataprocessscript>` elements without the `language` attribute during component push. However, at runtime, the Groovy script engine initialization requires this attribute to determine which scripting engine to load. Without it, the engine lookup returns null, causing immediate NullPointerException.
+The platform API accepts `<dataprocessscript>` elements without the `language` attribute during component push. However, at runtime, script engine initialization requires this attribute to determine which scripting engine to load. Without it, the engine lookup returns null, causing immediate NullPointerException.
 
 **Root Cause:** Platform validation doesn't enforce required scripting attributes, but runtime engine requires them.
 
@@ -1175,23 +1175,23 @@ The platform API accepts `<dataprocessscript>` elements without the `language` a
 
 ### Critical Rule
 
-**Always include both required attributes on `<dataprocessscript>` elements:**
-- `language="groovy2"` - Specifies Groovy 2.4 runtime (REQUIRED)
-- `useCache="true"` - Enables script compilation caching (REQUIRED for performance)
+**Always include the `language` attribute on `<dataprocessscript>` elements:**
+- `language` - Specifies which script engine to load (REQUIRED). Valid tokens are `groovy2` (Groovy 2.4, the default), `groovy` (Groovy 1.5), and `javascript` (JavaScript). What matters for this error is that the attribute is *present*; any valid token avoids it.
+- `useCache="true"` - Script compilation caching flag (recommended, not required for execution — a step runs whether it is `"true"`, `"false"`, or omitted).
 
-Without these attributes, the script engine cannot initialize and runtime execution fails immediately.
+Without the `language` attribute, the script engine cannot initialize and runtime execution fails immediately.
 
 ### Pre-Push Checklist
 
 Before pushing any Data Process Custom Scripting steps:
 1. [ ] Locate all `<dataprocessscript>` elements in component XML
-2. [ ] Verify each has `language="groovy2"` attribute
-3. [ ] Verify each has `useCache="true"` attribute
+2. [ ] Verify each has a `language` attribute (`groovy2` default; `groovy`/`javascript` also valid)
+3. [ ] Optionally set `useCache="true"` (performance flag; not required for execution)
 4. [ ] Test execution after deployment to confirm script runs successfully
 
 ### Related Step Documentation
 
-See references/steps/data_process_groovy_step.md for complete Custom Scripting (Groovy) XML reference and examples.
+See references/steps/data_process_custom_scripting.md for complete Custom Scripting XML reference and examples.
 
 ---
 
@@ -1744,7 +1744,7 @@ Groovy scripts inside `<dataprocessscript>` components are compiled by the Atom 
 
 ### Why It Happens
 
-The platform API validates XML schema at push and deployment metadata at deploy, but the `<script>` body is stored as opaque text. Groovy compilation happens inside the Atom on first execution, via the `language="groovy2"` engine configured on `<dataprocessscript>`. Push-time and deploy-time checks never exercise the Groovy parser, so syntactic issues cannot surface until runtime.
+The platform API validates XML schema at push and deployment metadata at deploy, but the `<script>` body is stored as opaque text. Compilation happens inside the runtime the first time a script executes, via the script engine selected by the `language` attribute on `<dataprocessscript>`. Push-time and deploy-time checks never exercise the script parser, so syntactic issues cannot surface until execution. (The same deploy-clean / execution-fail pattern applies to JavaScript scripts, which the Nashorn engine likewise compiles on first execution.)
 
 ### Wrong Pattern — Treating Deploy Success as Verification
 
@@ -1769,7 +1769,7 @@ After any change to a `<dataprocessscript>` body, execute the process, then veri
 
 ### Related
 
-- `references/steps/data_process_groovy_step.md` — Data Process Groovy step reference
+- `references/steps/data_process_custom_scripting.md` — Data Process Custom Scripting step reference
 - Issue #17 documents a sibling "deploy-clean, runtime-fails" pattern for the same step type (missing `language`/`useCache`)
 
 ---

@@ -113,10 +113,13 @@ Exact match is **case-insensitive**. An input of "JOHN" matches a table entry of
 When multiple rows match the input, the **first matching row** (by row order in the table definition) is returned. No error, no aggregation.
 
 ### No Match
-When no row matches the input, the lookup returns an **empty string**. No error is thrown and the process continues normally. Downstream logic should check for empty results if a missing match requires special handling.
+When no row matches the input, the lookup produces **no value** — in a map, the target field is left unwritten (absent from the output document, not `""`); if it is the only field, the document serializes blank. No error is thrown and the process continues normally. Downstream logic should check for the empty case if a missing match requires special handling.
 
 ### skipLookupIfNoInputs
-In map CrossRefLookup functions, `skipLookupIfNoInputs="true"` silently skips the lookup when the input value is empty. The output field produces no value (not an empty string — the field is absent from the output document). No error is thrown and the process continues normally.
+In map CrossRefLookup functions, `skipLookupIfNoInputs` controls what happens when an input value is empty:
+
+- `"true"` (recommended) — the lookup is silently skipped. The output field produces no value (not an empty string — the field is absent from the output document). No error, process continues.
+- `"false"` — the lookup still runs, and an empty input acts as an unconstrained key that matches **every** row, so it returns the **first row's** value (per Multiple Matches, above). No error is thrown — this is silent, plausible-looking wrong data. Prefer `"true"` unless empty-key matching is specifically intended.
 
 ## Column Indexing
 
@@ -131,7 +134,7 @@ In map CrossRefLookup functions, `skipLookupIfNoInputs="true"` silently skips th
 
 ## Cross Reference Lookup in Maps
 
-Cross reference lookups are available as a map function (`type="CrossRefLookup"`, `category="Lookup"`). The function takes one or more input columns to match on and returns one or more output columns.
+Cross reference lookups are available as a map function (`type="CrossRefLookup"`, `category="Lookup"`). The function takes one or more input columns to match on and returns one or more output columns. The `cacheOption` shown below is `none`; it also accepts `document` and `map` to cache lookup results — see `map_component_functions.md` (Function Result Caching).
 
 ```xml
 <FunctionStep cacheEnabled="true" cacheOption="none" category="Lookup"
@@ -171,6 +174,8 @@ Cross reference lookups are available as a map function (`type="CrossRefLookup"`
 | `index` | int | Matches the `key` of the corresponding Input/Output in the function's Inputs/Outputs section |
 | `name` | string | Column header label |
 | `refId` | int | 1-based column reference in the cross reference table |
+
+An `index` that does not match a function port `key` is **not** rejected at push time — it fails only at execution with `Invalid Cross Reference Lookup configuration, missing cross reference parameter with index N`. A clean push does not guarantee a valid lookup config.
 
 ### Mapping Wiring
 

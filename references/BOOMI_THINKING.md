@@ -167,6 +167,11 @@ REST CONNECTOR:
 - No design-time validation
 - REST connectors return raw responses - use Map/Set Properties steps for structured parsing
 
+### OpenAPI Connector Specifics
+A separate, spec-driven connector (`connectorType="officialboomi-X3979C-opena2-prod"`) for OpenAPI 3.0+ APIs; operations can be hand-authored and pushed via API, with the GUI import wizard as a design-time convenience.
+
+**Inverts the REST profile rule above**: OpenAPI operations DO use `requestProfileType`/`responseProfileType`. (Parameters also differ — defined in cookie metadata, not `customproperties` slots.) See `components/openapi_connector_operation_component.md` and `components/openapi_connection_component.md`.
+
 ## Step Design Principles
 ### Message Steps
 Template engines for generating document content from scratch or with variable substitution. Despite the name, they create document content, not just "send messages".

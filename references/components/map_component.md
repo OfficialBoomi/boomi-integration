@@ -344,38 +344,14 @@ Even without transformations, exported maps include:
 
 ## Map Functions
 
-Map functions enable transformations beyond simple field-to-field mapping. See references/components/map_component_functions.md for comprehensive function documentation including Groovy scripting, date formatting, and all available transformations.
+Map functions allow transformation logic beyond simple field-to-field mapping to be applied to individual field values as they are being mapped.
 
-Available capabilities include:
-- Function architecture and key concepts
-- Groovy scripting with input/output naming
-- Date formatting and timestamp functions
-- Dynamic property get/set operations
-- Complete working examples with XML configuration
+Functions come in two types:
 
-For transformations beyond simple field-to-field mapping, use these functions.
+- **Standard functions** — single-step built-in operations spanning these categories: Connector, Custom Scripting, Date, Language, Lookup, Numeric, Properties, and String.
+- **User-Defined functions** — reusable, standalone components that chain multiple standard function steps together in a defined sequence.
 
-### CRITICAL: Function GUI Requirements
-All map functions MUST include GUI positioning attributes for proper rendering:
-- `cacheEnabled="true"` and `sumEnabled="false"` - Required on all functions
-- `x="10.0" y="Y_COORD"` - Canvas coordinates (start at y="10.0", increment ~140px)
-
-### Currently Supported Functions
-
-- **Custom Scripting**
-  - Groovy scripting
-  
-- **Date Functions**  
-  - Date formatting
-  - Get current date
-  
-- **Properties Functions**
-  - Get dynamic process property
-  - Set dynamic process property  
-  - Get document property
-  - Set document property
-
-There are additional functions available within the platform. If you see them try your best to achieve the user's outcome and inform the user you don't posess that specific documentation. Groovy scripting has wide versatility so can be used to fulfill objectives that aren't available in the current offered set.
+See references/components/map_component_functions.md for comprehensive function documentation.
 
 ## Usage in Process
 

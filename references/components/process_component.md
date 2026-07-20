@@ -14,7 +14,7 @@
 |------------|-------------------|---------|------------------------|
 | Stop | `continue="true"` | `<stop continue="true"/>` | GUI stack overflow error |
 | Branch | `numBranches="N"` | `<branch numBranches="2"/>` | GUI blank canvas error |
-| Data Process (Groovy) | `language="groovy2"` `useCache="true"` | `<dataprocessscript language="groovy2" useCache="true">` | Runtime null script engine error |
+| Data Process (Custom Scripting) | `language` (e.g. `groovy2`) | `<dataprocessscript language="groovy2" useCache="true">` | Runtime null script engine error (missing `language`; `useCache` is an optional performance flag) |
 | WSS Start | `actionType="Listen"` | `<connectoraction actionType="Listen"...>` | Listener doesn't activate |
 
 ## Process Options
