@@ -32,7 +32,7 @@ Outside these two cases, use REST. HTTP Client is never chosen on stylistic or "
 
 ## Connection Structure
 
-Root is `<HttpSettings>`. GUI-authored connections emit all five sub-blocks (`AuthSettings`, `OAuthSettings`, `OAuth2Settings`, `AwsSettings`, `SSLOptions`) with empty attributes on unused blocks — the platform neither requires them on input nor backfills them on pull, so edits may safely omit unused blocks.
+Root is `<HttpSettings>`. All five sub-blocks (`AuthSettings`, `OAuthSettings`, `OAuth2Settings`, `AwsSettings`, `SSLOptions`) are required on every create and update, with empty/default attributes on unused blocks — the API accepts their absence, but the Build UI hard-errors on the component and it cannot be edited, saved, or closed. Unset encrypted attributes (`password`, `consumerSecret`, `tokenSecret`, `clientSecret`) may be omitted.
 
 ```xml
 <HttpSettings xmlns="" authenticationType="NONE|BASIC|PASSWORD_DIGEST|CUSTOM|OAUTH|OAUTH2|AWSV4|NETWORK_AUTHENTICATION"
