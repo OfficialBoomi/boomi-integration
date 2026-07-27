@@ -144,7 +144,8 @@ Each shape has an `x` and `y` attribute defining its position on the canvas. The
 ### Shape Connections
 Shapes connect through `<dragpoint>` elements within their `<dragpoints>` container:
 - Each dragpoint specifies a `toShape` attribute with the target shape's name
-- The dragpoint's own `x` and `y` coordinates appear to define the connection point location
+- Connectedness is resolved by name only — `toShape` (plus `identifier` matching for Process Call return paths, see `references/steps/process_call_step.md` § Return Path Mapping). The dragpoint's own `x` and `y` are purely cosmetic and do not affect whether shapes are connected
+- Coordinate convention for clean rendering: dragpoint `x` = target shape's `x` - 16, `y` = target shape's `y` + 8
 - Sequential shapes typically have one dragpoint leading to the next shape
 
 ### Branch Shapes

@@ -159,18 +159,15 @@ REST CONNECTOR:
 
 **Why this matters**: HTTP Client and REST bind dynamic values through different mechanisms. HTTP Client uses `isVariable="true"` on headers and path elements (the GUI "replacement variable" feature), resolved from DDPs of matching name set upstream. REST requires the process step's `<dynamicProperties>` element. Patterns do not port between them.
 
-**Critical Silent Failure - Profile Type Attributes:**
+**REST request & response profiles:**
 
-- NEVER use `requestProfileType` or `responseProfileType` attributes in REST connector operations
-- They don't exist in GUI and cause silent document flow failures
-- Connector reports success, process shows documents flowing, but content is lost/corrupted
-- No design-time validation
-- REST connectors return raw responses - use Map/Set Properties steps for structured parsing
+- REST Client operations support selectable `requestProfile`/`responseProfile` (with `requestProfileType`/`responseProfileType` = `json`|`xml`). The request profile enables parameter injection and Connector-Call input binding; the **response profile is informational only** and does not reshape output.
+- A plain REST step still emits the **raw** response regardless of the response profile — use a downstream Map/Set Properties step for structured parsing. The profile-type attributes are inert when no profile is linked.
 
 ### OpenAPI Connector Specifics
 A separate, spec-driven connector (`connectorType="officialboomi-X3979C-opena2-prod"`) for OpenAPI 3.0+ APIs; operations can be hand-authored and pushed via API, with the GUI import wizard as a design-time convenience.
 
-**Inverts the REST profile rule above**: OpenAPI operations DO use `requestProfileType`/`responseProfileType`. (Parameters also differ — defined in cookie metadata, not `customproperties` slots.) See `components/openapi_connector_operation_component.md` and `components/openapi_connection_component.md`.
+Like REST (above), OpenAPI operations use `requestProfileType`/`responseProfileType`. (Parameters differ, though — defined in cookie metadata, not `customproperties` slots.) See `components/openapi_connector_operation_component.md` and `components/openapi_connection_component.md`.
 
 ## Step Design Principles
 ### Message Steps
@@ -206,8 +203,8 @@ The "Swiss army knife" for document manipulation when Maps or Message steps aren
 **Groovy Scripting — Last Resort Only** (Design-Critical):
 A core Boomi value proposition is that integrations are manageable by humans through the platform UI. Native components (Maps, Decisions, Set Properties, Message steps) are visible, configurable, and debuggable in the GUI. Scripts are opaque black boxes that only the author can maintain. **Always use native Boomi components first, even when scripting would be faster to write.** The extra build effort pays for itself in maintainability.
 
-Scripting is only appropriate when native components genuinely cannot accomplish the task. Before writing any Groovy, exhaust these alternatives:
-1. Can Map step handle this transformation? → Use Map
+Scripting is only appropriate when native components genuinely cannot accomplish the task. Before writing any scripting, exhaust these alternatives:
+1. Can Map step handle this transformation? → Use Map (multi-step field logic included — a User-Defined Function chains standard map functions natively)
 2. Can Message step generate this content? → Use Message
 3. Can Decision/Route/Branch handle this routing? → Use Decision/Route/Branch
 4. Can Set Properties + concatenation solve this? → Use Set Properties
@@ -321,6 +318,9 @@ Key patterns that fail silently without errors:
 - **Quote escaping**: Message/Notify variable substitution failures - MOST COMMON BUG
 - **Connector parameters override document**: Document content ignored
 - **Parent-subprocess deployments**: Updates not reflected until parent redeployed
+- **UDF wiring keys**: Inside a User-Defined Function, a Mapping pointing at a nonexistent port key is accepted on push and executes without error — the wire is silently dropped and the downstream input reads empty (wrong output, no failure). NamePaths are decorative; only keys are checked, and only by you
+- **UDF interface drift**: Changing a User-Defined Function's interface keys breaks consuming maps at execution with a misleading error blaming the *source profile* — see `components/user_defined_function_component.md`
+- **Document cache key `taglistKey="-1"`**: accepted on push, but Add to Cache silently indexes nothing — the cache stays empty. Use `0` outside taglists
 - **Process Route reference prefix**: A `processRouteId` missing the `resource::rout:` prefix is accepted on push and deploy, failing only at execution
 - **XML schema mistakes**: Common validation errors
 
@@ -383,6 +383,8 @@ If the user provides their own naming convention, defer to it — the convention
 
 ## Critical Deployment Pattern
 **Parent-Subprocess Dependency**: When updating subprocesses, ALWAYS redeploy parent processes to pick up changes. This is the most dangerous deployment gotcha - parent processes snapshot subprocess versions at deployment time.
+
+The same snapshot semantics apply to User-Defined Functions: a map's UDF reference is unversioned, and packaging snapshots the then-current UDF revision — after editing a UDF, repackage and redeploy every process whose maps consume it.
 
 **Deployment Efficiency**: Parent deployment automatically includes all referenced components - deploy only the parent to update both parent and subprocess.
 

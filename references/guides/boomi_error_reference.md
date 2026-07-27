@@ -17,11 +17,11 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Symptom | Check Issue # |
 |---------|----------------|
 | Variables appear literally in output | #1 (Quote Escaping) |
+| `can't parse argument number` error at execution | #1 (Quote Escaping) |
 | API authentication failures (no error) | #2 (Environment Variables) |
 | Subprocess updates not taking effect | #3 (Deployment Dependency) |
 | Map output ignored by connector | #4 (Connector Parameters) |
 | GET request errors with body | #5 (REST GET Clearing) |
-| Documents flowing but content lost | #6 (Profile Type Trap) |
 | Components in wrong folder | #7 (Folder Placement) |
 | XML validation errors during push | #8 (Schema Mistakes) |
 | Stack overflow in map editor | #9 (Map Function Attributes) |
@@ -60,7 +60,7 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 3 | Parent-Subprocess Deployment Dependency | High | Silent - old behavior |
 | 4 | Connector Parameters Override Document Content | Medium | Silent - data ignored |
 | 5 | REST GET Document Clearing | Medium | Runtime error |
-| 6 | REST Connector Profile Type Trap | Medium | Silent - document loss |
+| 6 | REST Connector Profile Type Trap (historical, resolved in V11) | — | No longer occurs on V11+ runtimes |
 | 7 | Folder Placement Verification | High | Design-time visibility |
 | 8 | Common XML Schema Mistakes | High | Design-time validation |
 | 9 | Map Function GUI Requirements | Low | GUI rendering error |
@@ -144,6 +144,7 @@ Single quotes toggle between literal mode and variable substitution. Inside sing
 - **Single quote exits literal mode**: Back to variable substitution
 - **Literal single quote**: Use two single quotes (`''`) to output one quote
 - **Critical Pattern**: `'literal text '{variable}' more literal '{variable2}' end'`
+- **Bare `{}` fails at execution** (push and deploy succeed): `can't parse argument number: ; Caused by: For input string: ""`. Output a literal `{}` with `<msgTxt>'{}'</msgTxt>`.
 
 ### Copy-Paste Templates (Working Patterns)
 
@@ -374,7 +375,7 @@ REST GET connectors:
 ```xml
 <!-- Message step creates document -->
 <message combined="false">
-  <msgTxt>{"search": "criteria"}</msgTxt>
+  <msgTxt>'{"search": "criteria"}'</msgTxt>
 </message>
 
 <!-- REST GET inherits document content -->
@@ -388,7 +389,7 @@ REST GET connectors:
 ```xml
 <!-- Message step creates document for other purposes -->
 <message combined="false">
-  <msgTxt>{"search": "criteria"}</msgTxt>
+  <msgTxt>'{"search": "criteria"}'</msgTxt>
 </message>
 
 <!-- Empty Message step clears document content -->
@@ -415,40 +416,11 @@ For REST GET: Check upstream creates content → Add empty Message step before G
 
 ---
 
-## Issue #6: REST Connector Profile Type Trap
+## Issue #6: REST Connector Profile Type Trap (historical — resolved in V11)
 
-**Frequency:** Medium
-**Detection:** Silent - document flow continues but content is corrupted
+**Status:** Obsolete as of REST Client connector Version 11, which added selectable request/response profiles. Retained only as a note for pre-V11 runtimes.
 
-### The Problem
-
-REST connector operations in Boomi GUI do NOT support `requestProfileType` or `responseProfileType` attributes despite what some documentation suggests. Including these attributes causes silent document content loss.
-
-### Why It Happens
-
-Connector reports success, logs show documents flowing, but content is lost/corrupted. No design-time errors - fails silently at runtime.
-
-### Wrong Pattern - Silent Document Loss
-
-```xml
-<!-- CAUSES SILENT DOCUMENT FLOW FAILURES -->
-<GenericOperationConfig customOperationType="GET"
-                        operationType="EXECUTE"
-                        requestProfileType="none"
-                        responseProfileType="json">
-```
-
-### Correct Pattern - No Profile Type Attributes
-
-```xml
-<!-- CORRECT: No profile type attributes -->
-<GenericOperationConfig customOperationType="GET"
-                        operationType="EXECUTE">
-```
-
-### Pre-Push Checklist
-
-Remove `requestProfileType` and `responseProfileType` attributes. Use Map/Set Properties for response parsing instead.
+Before Version 11, REST operations did not support request/response profiles, and older guidance was to strip `requestProfileType`/`responseProfileType`. On Version 11+ these attributes are supported when paired with a profile, and **inert when no profile is linked**. Document the supported pattern instead — see `components/rest_connector_operation_component.md`.
 
 ---
 
@@ -468,6 +440,7 @@ Components land in account root folder instead of designated project folder desp
 - Folder ID placeholder patterns (`{FOLDER_GUID}`) not resolved before API call
 - Environment variable `BOOMI_TARGET_FOLDER` not resolving correctly
 - Tool folder resolution logic issues
+- Agent deliberately chose a different parent folder (e.g. to match existing account conventions) — build under `BOOMI_TARGET_FOLDER` when set, unless the user explicitly directed otherwise
 
 ### Wrong Patterns
 
@@ -476,7 +449,7 @@ Components land in account root folder instead of designated project folder desp
 <bns:Component componentId=""
                name="Component_Name"
                type="profile.json"
-               folderFullPath="ClaudeCode/ProjectFolder">
+               folderFullPath="TargetFolder/ProjectFolder">
 <!-- Result: Component lands in root folder -->
 
 <!-- Pattern 2: Placeholder not resolved -->
@@ -633,7 +606,7 @@ See `references/components/map_component_functions.md` for full detail.
 
 ### Additional Consideration
 
-**Map function independence:** Each function widget should be standalone - no chaining function outputs to other function inputs. For complex multi-step transformations, use single Groovy function instead of chaining.
+**Map function independence:** Within a map's `<Functions>`, each function widget must be standalone - never wire one function's output to another function's input. For multi-step transformations, prefer a User-Defined Function component (`transform.function`, where step-to-step chaining is legal - see `references/components/user_defined_function_component.md`); use a single scripting function only when the logic genuinely needs code.
 
 ---
 
@@ -760,7 +733,7 @@ Temporary test Message shapes added for subprocess isolated testing are forgotte
 <!-- Test Message shape for isolated testing -->
 <shape x="100" y="200" shapetype="message">
   <message combined="false">
-    <msgTxt>{"test": "data", "mode": "development"}</msgTxt>
+    <msgTxt>'{"test": "data", "mode": "development"}'</msgTxt>
   </message>
 </shape>
 

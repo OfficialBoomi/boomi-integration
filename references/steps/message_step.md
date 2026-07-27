@@ -301,6 +301,10 @@ Hello {1}, today is {2}
 
 **Common use case:** SQL statements with string literals inside JSON payloads
 
+### Literal `{}` Output
+
+Bare `{}` in `<msgTxt>` pushes and deploys cleanly but fails at execution time (`can't parse argument number: ; Caused by: For input string: ""`) — `{` starts a variable reference and the empty argument number cannot parse. To output a literal `{}` (e.g. an empty JSON body), wrap it in single quotes: `<msgTxt>'{}'</msgTxt>`.
+
 ## Common Patterns
 - Generate JSON/XML payloads with dynamic values
 - Create formatted messages combining multiple properties

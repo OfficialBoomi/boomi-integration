@@ -44,7 +44,8 @@ Verify the component was pulled successfully to `active-development/`.
 Read the pulled XML and identify all GUID-like attributes:
 
 Common dependency patterns:
-- **Maps**: `fromProfile`, `toProfile`, `docCache`
+- **Maps**: `fromProfile`, `toProfile`, `docCache`, `id` on `FunctionStep category="userdefined"` (a User-Defined Function component)
+- **User-Defined Functions (transform.function)**: `componentId` on `<Scripting>` and `<DefinedProcessProperty>`, `connection` on `<SqlLookup>`, `crossRefTableId` on `<CrossRefLookup>`, `connectionId`/`operationId`/`parameter-profile`/`output-profile` on `<ConnectorCall>`, `docCache` on `<DocumentCacheLookup>` — recurse through the UDF one level deeper than for a plain map
 - **Processes**: `connectionId`, `operationId`, `mapId`, `calledProcess`
 - **Operations**: `connectionId`, `requestProfileId`, `responseProfileId`
 

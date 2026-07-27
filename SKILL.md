@@ -113,8 +113,9 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── edi_profile_component.md          # Use when: defining EDI document schemas, troubleshooting EDI parsing failures, understanding Boomi-specific EDI configuration. Includes Transaction Set ID → GS-01 mapping and HIPAA GS-08 Implementation Convention codes.
 │   │   ├── database_profile_component.md     # type: "profile.db". Use when: defining request/response structure for the Database (Legacy) connector - SQL statements, stored procedures, dynamic vs standard insert/update/delete, result-set columns. NOT for Database V2 (which uses JSON profiles).
 │   │   ├── map_component.md                  # Use when: creating field-to-field transformations between profiles, understanding map generation rules and mapping patterns
-│   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, conditionals, math, lookups
+│   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, numeric/math, lookups (cross reference, simple, document cache, SQL), connector calls, custom scripting, and process/document property get-set
 │   │   ├── map_script_component.md           # Use when: creating a standalone reusable map-scripting component (type="script.mapping", Groovy or JavaScript) and referencing it from a Map's Scripting function instead of an inline script
+│   │   ├── user_defined_function_component.md # type: "transform.function". Use when: you need to chain multiple map functions together — a plain Map component forbids wiring one function into another, so a User-Defined Function (UDF) packages the multi-step pipeline into one reusable component. Also for consuming a UDF from a map (FunctionStep category="userdefined") or editing a UDF that deployed processes already reference
 │   │   ├── process_script_component.md       # Use when: creating a standalone reusable Process Script component (type="script.processing", Groovy or JavaScript) and referencing it from a Data Process Custom Scripting step via useComponent="true" instead of an inline script
 │   │   ├── rest_connection_component.md      # connectorType: "officialboomi-X3979C-rest-prod". Use when: creating REST API connections - base URLs, authentication patterns, timeouts, connection pooling
 │   │   ├── rest_connector_operation_component.md # Use when: defining REST operations - HTTP methods, resource paths, headers, query parameters, request/response profiles
@@ -460,10 +461,10 @@ See `references/guides/boomi_error_reference.md` Issue #3 for details.
 
 ### Folder Management & Component Creation
 **Organization Hierarchy:**
-- Root → ClaudeCode (`BOOMI_TARGET_FOLDER`) → Project-Specific → Components
+- Root → Target folder (`BOOMI_TARGET_FOLDER`) → Project-Specific → Components
+- **When `BOOMI_TARGET_FOLDER` is set, build under it** — deviate only on explicit user instruction; if elsewhere seems better (e.g. existing account conventions), ask first
 - **ALL components MUST go into organized folders**, never create components into the account root
-- Create project folders using naming convention: `ProjectName-ShortDescription`
-- Example: `bash <skill-path>/scripts/boomi-folder-create.sh "AcmeCorp-EmailNotification"`
+- Create project folders using naming convention `ProjectName-ShortDescription`, e.g. `bash <skill-path>/scripts/boomi-folder-create.sh "AcmeCorp-EmailNotification"`
 
 **Component Creation Workflow:**
 ```bash
@@ -474,10 +475,6 @@ bash <skill-path>/scripts/boomi-folder-create.sh "Acme-MVP-WeatherAPI"
 # 2. Create components with folderId in XML (push after each to get IDs for dependencies)
 bash <skill-path>/scripts/boomi-component-create.sh active-development/<profile-type>/MyProfile.xml  # <profile-type> is the component-type identifier, e.g. profile.json, profile.xml
 ```
-
-**Folder Naming Convention:**
-Format: `ProjectName-ShortDescription`
-- Examples: `TechCorp-OrderSync`, `Acme-APIShowcase`
 
 **Critical Requirements:**
 - Use actual folder GUID in `folderId` attribute (not `folderFullPath`)

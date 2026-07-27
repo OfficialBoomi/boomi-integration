@@ -71,10 +71,13 @@
 
 ## GET Operations
 
+> **Required for GET:** every Get must include `<field id="schemaName" type="string" value=""/>` (empty value is fine). Without it the Get executes but returns **zero rows** to the output document — a silent failure. With it, a Get is fully API-authorable (no GUI Import needed) and request/response profiles may be hand-authored. DB V2 GET emits **one document per row**.
+
 ### Dynamic Get
 ```xml
 <field id="GetType" type="string" value="Dynamic Get"/>
 <field id="INClause" type="boolean" value="false"/>
+<field id="schemaName" type="string" value=""/>
 <field id="query" type="string" value="select * from tablename"/>
 <field id="linkElement" type="string" value=""/>
 <field id="maxRows" type="integer"/>
@@ -89,6 +92,7 @@ Connector generates SQL at runtime from input document structure.
 ```xml
 <field id="GetType" type="string" value="Standard Get"/>
 <field id="INClause" type="boolean" value="false"/>
+<field id="schemaName" type="string" value=""/>
 <field id="query" type="string" value="select * from tablename where column = ?"/>
 <field id="linkElement" type="string" value=""/>
 <field id="maxRows" type="integer"/>
@@ -99,10 +103,13 @@ Connector generates SQL at runtime from input document structure.
 
 User-provided SQL with `?` placeholders or `$paramName` named parameters.
 
+For a query with no parameters, drive the operation with an empty document or a literal `{}` produced by a Message step (`<msgTxt>'{}'</msgTxt>` — bare `{}` fails at execution; see `message_step.md`). Non-empty input that doesn't match the query's parameters returns success with a single empty document and no rows — no error is raised.
+
 ### Standard Get with IN Clause
 ```xml
 <field id="GetType" type="string" value="Standard Get"/>
 <field id="INClause" type="boolean" value="true"/>
+<field id="schemaName" type="string" value=""/>
 <field id="query" type="string" value="where customerName in ($customerName)"/>
 ```
 
@@ -118,6 +125,7 @@ Named parameters with `$` prefix accept arrays when `INClause="true"`.
 <GenericOperationConfig objectTypeId="table1,table2" ...>
   <field id="GetType" type="string" value="Standard Get"/>
   <field id="INClause" type="boolean" value="true"/>
+  <field id="schemaName" type="string" value=""/>
   <field id="query" type="string" value="
     select * from table1
     left join table2 on table1.id = table2.fk

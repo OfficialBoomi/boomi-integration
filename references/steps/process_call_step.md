@@ -84,7 +84,9 @@ Find the subprocess's return shape names before wiring:
 grep 'shapetype="returndocuments"' <subprocess>.xml
 ```
 
-**A mismatch routes nothing, silently.** A `childShapeName` with no matching subprocess return shape delivers 0 documents — the process completes with no error, and the mismatch is not caught at save time (in the GUI the branch shows an unresolved `+` stub). The only signal is a WARNING in the parent's process log: `Ignoring returned documents for unknown shape <name>`. If a downstream branch receives no documents, verify the name match.
+**A mismatch routes nothing, silently.** A `childShapeName` with no matching subprocess return shape delivers 0 documents — the push is accepted, the process completes with no error, and the downstream step is skipped (`No documents found. Skipping execution for the <step> step.`). The only signal is a WARNING in the parent's process log: `Ignoring returned documents for unknown shape <name>` — where `<name>` is the subprocess return shape whose documents found no matching return path, not the name the parent declared. With multiple return paths, a mismatch affects only its own path; correctly matched paths still route. If a downstream branch receives no documents, verify the name match.
+
+**GUI symptom of a mismatch:** the Build canvas first draws the connection from the XML dragpoint, then immediately detaches it (once the subprocess's return shapes are resolved), leaving the return path as an unresolved `+` stub. The dragpoint and its `toShape` remain in the XML, so inspecting the parent XML alone makes the wiring look intact — verify `childShapeName` against the subprocess's returndocuments shape names instead. If shapes "appear connected briefly, then disconnect on their own," check for this mismatch.
 
 ## Common Pattern: Listener with Testable Logic
 ```
@@ -100,6 +102,6 @@ This pattern enables test mode for the business logic while maintaining the list
 ## Implementation Notes
 - Subprocess must have passthrough start to receive parent data
 - Return shape names in subprocess display in the parent process, which is helpful for visual editing
-- All subprocess branches complete before returning to parent
+- All subprocess branches complete before returning to parent; the parent's return branches then execute sequentially in `returnpaths` order, each receiving only the documents from its matching subprocess return shape
 - A DPP set inside a `wait="true"` subprocess persists into the parent and is readable after the call returns (read with `valueType="process"`). A side-effect subprocess can return its result via a DPP instead of a returned document — e.g. a sub that returns only on error, with the parent reading the DPP in a later step
 - A process can call itself recursively via Process Call. When doing this, always include a recursion depth guard (e.g. a DPP counter checked by a Decision step) to cap depth at no more than 5 levels and prevent runaway processes

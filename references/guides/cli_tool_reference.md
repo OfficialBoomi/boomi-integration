@@ -14,7 +14,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 
 **Environment & Setup**:
 - **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
-- **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent.
+- **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent. If the fallback WARN fires, tell the user their configured target folder was not used and confirm the correct folder ID.
 - **boomi-shared-server-info.sh**: Fetch atom `apiType`, default-port `url`, default-port `auth` (when reportable), and atom-wide `minAuth` floor from `SharedServerInformation`. Run before authoring any WSS listener or API Service Component to route by API tier (`basic`/`intermediate` → bare WSS; `advanced` → API Service Component). Takes an atom ID as arg; defaults to `$BOOMI_TEST_ATOM_ID`. Exits non-zero on lookup failure. Output is supplementary — see `references/platform_entities/shared_web_server.md` for what the API can and can't tell you about a multi-port atom.
 
 **Component Management** (all support `--branch <name_or_id>` for Branch & Merge accounts):
@@ -285,6 +285,7 @@ Opt-in JSONL log of script-level operations (component pulls, pushes, deployment
 - Encrypted hex values may change across pull cycles due to platform-side re-encryption — this is expected, not corruption
 - Some connectors (e.g., MCP Server) use `encrypted="true"` on `<properties>` elements within `customproperties` fields instead of `type="password"` — see the relevant connection component reference
 - Do not attempt to encrypt or re-encrypt values programmatically — this will produce broken credentials
+- Do not copy an encrypted value from one component into a different component — a transplanted ciphertext can push cleanly but fail to decrypt when the process executes (surfacing as an auth failure with no other symptom). To credential a new component, have the user set the value in the GUI on that component, then pull it
 
 **Process property passwords**: Prefer leaving `defaultValue` empty for `type="password"` fields and supplying real values via Environment Extensions. If a pulled component has a non-empty password `defaultValue`, let the user know — they may want to migrate to Environment Extensions.
 

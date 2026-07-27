@@ -349,9 +349,9 @@ Map functions allow transformation logic beyond simple field-to-field mapping to
 Functions come in two types:
 
 - **Standard functions** — single-step built-in operations spanning these categories: Connector, Custom Scripting, Date, Language, Lookup, Numeric, Properties, and String.
-- **User-Defined functions** — reusable, standalone components that chain multiple standard function steps together in a defined sequence.
+- **User-Defined functions** — reusable, standalone components (`type="transform.function"`) that chain multiple standard function steps together in a defined sequence.
 
-See references/components/map_component_functions.md for comprehensive function documentation.
+See references/components/map_component_functions.md for comprehensive function documentation, and references/components/user_defined_function_component.md for authoring User-Defined Function components.
 
 ## Usage in Process
 

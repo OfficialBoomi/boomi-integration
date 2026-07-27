@@ -1,7 +1,7 @@
 # REST Connector Operation Component
 
 ## Contents
-- CRITICAL WARNING
+- Request and Response Profiles
 - Overview
 - Component Structure
 - HTTP Methods
@@ -17,19 +17,19 @@
 - Dynamic Value Replacement
 - Implementation Notes
 
-## **CRITICAL WARNING**
+## Request and Response Profiles
 
-**DO NOT USE** `requestProfileType` or `responseProfileType` attributes in REST connector operations. These attributes **do not exist** in the Boomi GUI and will cause **silent document flow failures**:
+REST Client operations support **selectable request and response profiles** for GET, HEAD, POST, DELETE, PUT, PATCH, OPTIONS, and TRACE. Set them on `GenericOperationConfig` as `requestProfile`/`responseProfile` GUIDs paired with `requestProfileType`/`responseProfileType` (`json` or `xml`):
 
 ```xml
-<!-- WRONG - CAUSES SILENT FAILURES -->
-<GenericOperationConfig requestProfileType="none" responseProfileType="json">
-
-<!-- CORRECT -->
-<GenericOperationConfig customOperationType="GET" operationType="EXECUTE">
+<GenericOperationConfig customOperationType="POST" operationType="EXECUTE"
+                        requestProfile="{REQUEST_PROFILE_ID}"  requestProfileType="json"
+                        responseProfile="{RESPONSE_PROFILE_ID}" responseProfileType="json">
 ```
 
-If you see these attributes, remove them immediately. See references/guides/boomi_error_reference.md Issue #6 for details.
+- The **request profile** describes the request body, enables injecting values via parameters on the connector step, and is what a **Connector Call map function** binds its inputs to (see `map_component_functions.md`).
+- The **response profile is informational only for a plain REST step** — it does **not** validate or reshape the raw response, which the step emits as-is; use a downstream Map/Set Properties step for structured field access. **When the operation is invoked from a Connector Call map function, however, the response profile IS parsed against the body** — a mismatch errors the document (e.g. an object profile against a JSON-array body fails with `Expected START_OBJECT, found START_ARRAY`).
+- The profile-type attributes are **inert when no profile is linked** — a bare `requestProfileType`/`responseProfileType` with no profile neither helps nor harms, and both are safely omitted when the operation uses no profiles. (`requestProfileType="none"` is also accepted on push and is equally inert.)
 
 ## Overview
 REST Connector Operation components define specific API endpoints, HTTP methods, headers, query parameters, and request/response handling. They work with REST Connection components to execute API calls.
@@ -122,7 +122,7 @@ REST Connector Operation components define specific API endpoints, HTTP methods,
 
 ## Response Handling
 
-**IMPORTANT**: REST Connector Operations in the Boomi GUI do NOT support configuring request or response profiles. All responses are returned as raw text/binary data.
+**Response shape**: a plain REST step emits the **raw** response body as its output document — the response profile, if set, is informational only and does not reshape it (see Request and Response Profiles above). To work with structured response data, parse it after the connector step:
 
 ### Processing JSON Responses
 To work with JSON API responses, use a separate approach after the connector step:

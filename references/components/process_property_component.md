@@ -9,6 +9,7 @@
 - Persistence
 - Process Property vs Dynamic Process Property
 - Referencing in Set Properties
+- Referencing in Map Functions
 - Referencing in Groovy Scripts
 - Environment Extensions
 - Complete Examples
@@ -76,13 +77,13 @@ Each `definedProcessProperty` element defines one property in the collection.
 | Number | `number` | Numeric string (e.g., `"2222"`) | Numeric values, optional allowed values list |
 | Boolean | `boolean` | `"true"` or `"false"` | True/false toggle |
 | Date | `date` | ISO 8601 (e.g., `"2026-01-01T00:00:00Z"`) | Date values |
-| Password | `password` | Plaintext string | GUI masks the value and the Environment Extensions dialog uses a secure input field, but `defaultValue` is stored and returned as plaintext by the API. Anyone with API access can read it. **Always leave `defaultValue` empty** for password-type properties — supply real values via Environment Extensions overrides only. When pulling an existing component with non-empty password `defaultValue`, warn the user and recommend migrating to Environment Extensions. |
+| Password (labeled as "Hidden") | `password` | Plaintext string | GUI masks the value and the Environment Extensions dialog uses a secure input field, but `defaultValue` is stored and returned as plaintext by the API. Anyone with API access can read it. **Always leave `defaultValue` empty** for password-type properties — supply real values via Environment Extensions overrides only. When pulling an existing component with non-empty password `defaultValue`, warn the user and recommend migrating to Environment Extensions. |
 
 Data types cannot be changed after a component is created and pushed to the platform. Attempting to push a type change returns HTTP 400: `"Changing the data type for the saved component '...' (key:...) is not allowed."`
 
 ## Allowed Values
 
-String and Number types support restricted value lists via `allowedValues`. When defined, the property can only be set to one of the listed values.
+String and Number types support restricted value lists via `allowedValues`. The restriction is a design-time control: the GUI limits input to the listed values, and a component push requires `defaultValue` to be in the list. It is **not enforced at request time on all write paths** — a `DefinedProcessPropertySet` map function silently accepts an out-of-list value, which becomes the live property value (see `map_component_functions.md`). Don't build logic that assumes the property can only hold listed values.
 
 ```xml
 <definedProcessProperty key="prop-log-level">
@@ -116,7 +117,7 @@ When an `allowedValues` list is defined, the `defaultValue` must also be present
 When `persisted` is `true`, the property's value at the end of an execution carries over as the starting value for the **next execution of the same process** on the same Atom/environment. Persistence is scoped per-process — two processes referencing the same component maintain completely independent persisted state. Writing a value in Process A does not affect what Process B sees.
 
 - The `defaultValue` is used only for the very first execution of a given process (before any persisted value exists for that process)
-- A Set Properties step or Groovy script can update the persisted value during execution
+- A Set Properties step, Groovy script, or `DefinedProcessPropertySet` map function can update the persisted value during execution
 
 ## Process Property vs Dynamic Process Property
 
@@ -124,7 +125,7 @@ When `persisted` is `true`, the property's value at the end of an execution carr
 |---|---|---|
 | Definition | Standalone component with typed fields | Created inline in Set Properties steps |
 | Data types | String, Number, Boolean, Date, Password | String only |
-| Validation | Type enforcement, optional allowed values | No validation |
+| Validation | Type enforcement, optional allowed values (design-time — see Allowed Values) | No validation |
 | Environment extensions | `processProperties` section in Extensions API | `properties` section in Extensions API |
 | Naming | Label + unique key per property | Freeform name (e.g., `DPP_BATCH_ID`) |
 | Reusability | Same component referenced by multiple processes | Defined per-process |
@@ -164,6 +165,14 @@ Process Property component values are read as a parameter value source using `va
 | `propertyLabel` | string | The `label` of the specific property — GUI display only, not used at runtime |
 
 Only `componentId` and `propertyKey` affect runtime behavior. Always include `componentName` and `propertyLabel` so the reference remains identifiable in the Boomi GUI.
+
+### Writing a property from a Set Properties step
+
+A Set Properties step writes a defined property using a `<documentproperty>` whose `propertyId` is `definedprocess.{componentId}@{propertyKey}` — see `set_properties_step.md` for the full syntax. The written value is immediately visible to `definedparameter` reads in later steps.
+
+## Referencing in Map Functions
+
+The **Get Process Property** (`DefinedProcessPropertyGet`) and **Set Process Property** (`DefinedProcessPropertySet`) map functions read and write defined properties inside a map, addressed by the same `componentId` + `propertyKey` pair. See `map_component_functions.md` (Properties section).
 
 ## Referencing in Groovy Scripts
 

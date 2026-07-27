@@ -216,8 +216,13 @@ For delimited files:
 ```xml
 <DelimitedOptions fileDelimiter="commadelimited"
                   removeEscape="false"
-                  textQualifier="doublequote"/>
+                  textQualifier="textqualifierdouble"/>
 ```
+
+### Text Qualifier (textQualifier)
+- `na` - None
+- `textqualifierdouble` - Double quote (")
+- `textqualifiersingle` - Single quote (')
 
 ### Data Types
 - `character` - Text/string data

@@ -69,7 +69,7 @@ Keys use `xsi:type` for polymorphism. Three types:
 | `elementKey` | Profile element ID |
 | `keyType` | Optional. `"profile"` for ProfileElementKeyConfig. Platform may omit — `xsi:type` already carries the type. |
 | `name` | Element name. Format varies — may be short (`"id"`) or include full path (`"Id (Record/Elements/Id)"`) |
-| `taglistKey` | Taglist element ID. `-1` or `0` when not in a taglist. Positive integer when referencing a taglist. |
+| `taglistKey` | Taglist element ID. Use `0` when not in a taglist — `-1` is accepted on push but **silently breaks indexing** (Add to Cache reports success, the cache stays empty). Positive integer when referencing a taglist. |
 
 **DocumentPropertyKeyConfig** (`keyType="docprop"`) — maps to a document property:
 | Attribute | Description |
