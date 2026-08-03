@@ -285,4 +285,4 @@ Add Notify steps to inspect document payloads and property values during develop
 3. Follow the execution workflow above (deploy → execute → download logs → review)
 4. Continue to next section
 
-See `references/steps/notify_step.md` for complete XML patterns and parameter types.
+See `references/steps/notify_step.md` for Notify XML patterns and `references/guides/parameter_value_types.md` for parameter types.

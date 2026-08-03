@@ -164,6 +164,11 @@ REST CONNECTOR:
 - REST Client operations support selectable `requestProfile`/`responseProfile` (with `requestProfileType`/`responseProfileType` = `json`|`xml`). The request profile enables parameter injection and Connector-Call input binding; the **response profile is informational only** and does not reshape output.
 - A plain REST step still emits the **raw** response regardless of the response profile — use a downstream Map/Set Properties step for structured parsing. The profile-type attributes are inert when no profile is linked.
 
+### Email Connector Specifics
+**CRITICAL**: Two email connectors exist. Prefer Mail (IMAP) (`connectorType="mailsdk"`) for new work; for editing existing `connectorType="mail"` components, see `components/mail_component.md`. Boomi no longer actively maintains the older Mail connector.
+
+**Why this matters**: patterns do not port. Mail (IMAP) carries SMTP and IMAP on a *single* connection; Mail carries one host/port pair, so send and get need *separate* connections. Mail has no step parameter surface — per-document values come only from `connector.mail.*` document properties.
+
 ### OpenAPI Connector Specifics
 A separate, spec-driven connector (`connectorType="officialboomi-X3979C-opena2-prod"`) for OpenAPI 3.0+ APIs; operations can be hand-authored and pushed via API, with the GUI import wizard as a design-time convenience.
 
@@ -311,7 +316,7 @@ See `references/components/document_cache_component.md` and `references/steps/do
 
 **Why this matters**: Boomi processes are opaque at runtime. Notify steps provide visibility into document content, property values, and execution flow at critical points.
 
-**Essential concept**: Place Notify steps strategically (after Message steps, before/after connector calls, after Set Properties, always on Catch paths) to validate behavior and payloads during development. After or before notable process points, use `valueType="current"` to log the raw document for visibility.
+**Essential concept**: Place Notify steps strategically (after Message steps, before/after connector calls, after Set Properties, always on Catch paths) to validate behavior and payloads during development. After or before notable process points, use `valueType="current"` to log the raw document for visibility. Notify parameters can read DDPs, DPPs, Process Property components, profile elements, execution metadata directly, and more — no need to stage a value into a DDP/DPP just to log it.
 
 ## Critical Silent Failures Awareness
 Key patterns that fail silently without errors:

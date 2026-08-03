@@ -82,7 +82,7 @@ Parameters pass filter values and input IDs to the operation. Each parameter map
 
 The `connector.disk-sdk.directory` property is optional — when omitted, CREATE falls back to the connection's `directory` field.
 
-See `set_properties_step.md` for the Set Properties shape structure and full source-value type reference (static, dynamic/`track`, etc.).
+See `set_properties_step.md` for the Set Properties shape structure, and `references/guides/parameter_value_types.md` for the full source-value type reference (static, dynamic/`track`, etc.).
 
 ### GET — Read a File by Name
 

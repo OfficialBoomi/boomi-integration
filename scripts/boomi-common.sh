@@ -236,7 +236,8 @@ read_sync_branch() {
 xml_attr() {
   local attr="$1"
   # || true: a no-match must yield empty, not exit 1, under set -euo pipefail
-  { grep -o -m 1 "${attr}=\"[^\"]*\"" || true; } | sed "s/${attr}=\"//;s/\"//"
+  # head -n1: platform XML is single-line, so -o would emit every match
+  { grep -o "${attr}=\"[^\"]*\"" || true; } | head -n1 | sed "s/${attr}=\"//;s/\"//"
 }
 
 # Usage: set_root_component_id "<id-or-empty>" < file.xml

@@ -55,7 +55,7 @@ These are Boomi-specific values, NOT Salesforce API methods. The actual SOQL/API
 - `elementToSetId` - Must match the operation filter's `key` value (operation has `<Input key="1".../>`)
 - `elementToSetName` - Must match the operation input's `name` value exactly (operation has `<Input name="AccountID=".../>`)
 - `usesEncryption` - Set to "false" for standard parameters
-- `key` - 0-based parameter position (differs from Message step's 1-based keys)
+- `key` - sequential identifier
 
 **Critical**: Without `elementToSetName`, parameters will not display correctly in the Boomi GUI parameter selector and may cause silent configuration failures.
 

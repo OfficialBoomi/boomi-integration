@@ -140,6 +140,10 @@ Batch Process:
 
 **General Pattern:** Listen is preferred for typical Event Streams pub/sub patterns. Use Consume when process flow requires performing operations before retrieving Event Streams messages.
 
+**Listen requires an execution worker on cloud runtimes.** A Listen process runs inside an execution worker, which exists only on cloud runtimes and must be enabled by the cloud owner. On a cloud attachment with no worker the process deploys clean but never attaches: zero executions, messages pile up unconsumed, while Produce/Consume on the same connection work fine. Single-tenant runtimes (single-node Runtime or Molecule) run listeners directly and are exempt.
+
+If a deployed Listen produces no executions after repeated triggers (~3 attempts with nothing in the logs), prompt the user to confirm an execution worker is enabled on the target cloud runtime. Offer **Consume** as an alternative: a Consume operation (`consumeFromDeadLetter="false"`, scheduled or on-demand) is an ordinary execution that needs no worker and can drain a backlog a non-attaching Listen left behind.
+
 ## Platform Behavior
 
 - Producing to a non-existent topic auto-creates it (no description or subscriptions)

@@ -63,7 +63,7 @@ Disk V2 operation components define file system actions. Operations use `Generic
 
 Writes files to the target directory. Input document body becomes file content.
 
-**Required property:** The `connector.disk-sdk.fileName` document property must be set via a Set Properties step before the CREATE connector step executes. Without it, the connector returns error `[5]`. See [set_properties_step.md](../steps/set_properties_step.md) for the Set Properties shape structure and source-value types.
+**Required property:** The `connector.disk-sdk.fileName` document property must be set via a Set Properties step before the CREATE connector step executes. Without it, the connector returns error `[5]`. See `references/steps/set_properties_step.md` for the Set Properties shape structure and `references/guides/parameter_value_types.md` for source-value types.
 
 `trackResponse="false"` for CREATE operations.
 
@@ -158,7 +158,7 @@ Nested directories are auto-created when `createDir=true`.
 
 Writes files with create-or-update semantics. Creates the file if it doesn't exist; if it exists, overwrites or appends based on the `append` field. Shares the same `objectTypeId` as CREATE (`FILE_CREATE_UPSERT`).
 
-**Required property:** Same as CREATE — the `connector.disk-sdk.fileName` document property must be set via a Set Properties step before the UPSERT connector step executes. Without it, the connector returns error `[5]`. See [set_properties_step.md](../steps/set_properties_step.md) for the Set Properties shape structure and source-value types.
+**Required property:** Same as CREATE — the `connector.disk-sdk.fileName` document property must be set via a Set Properties step before the UPSERT connector step executes. Without it, the connector returns error `[5]`. See `references/steps/set_properties_step.md` for the Set Properties shape structure and `references/guides/parameter_value_types.md` for source-value types.
 
 `trackResponse="false"` for UPSERT operations.
 

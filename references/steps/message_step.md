@@ -2,17 +2,15 @@
 
 ## Contents
 - Purpose
-- Critical Quote Escaping Gotcha
-- Parameter Indexing Rules
+- THE #1 BOOMI BUG: Quote Escaping Causes Silent Variable Substitution Failures
+- CRITICAL GOTCHA WARNING - QUOTE ESCAPING
 - Configuration Structure
-- Parameter Value Types
-- Date Parameter Patterns
-- GUI Display Requirements
-- Quote Escaping Rules
+- Parameter Value Types (full reference: `references/guides/parameter_value_types.md`)
+- REMINDER Quote Escaping Rules (CRITICAL)
 - Common Patterns
 - Message Step Properties
 - Reference XML Examples
-- Troubleshooting
+- TROUBLESHOOTING QUOTE ESCAPING ISSUES
 
 ## Purpose
 Message steps are template engines that generate content from scratch or with variable substitution. Despite the name, they don't just "send messages" - they create document content using templates with dynamic parameters.
@@ -32,7 +30,7 @@ Message steps are template engines that generate content from scratch or with va
 
 Before reading anything else, understand this critical pattern:
 
-**NOTE**: This exact same issue affects **Notify steps** (shapetype="notify") - see **notify_step.md** for details.
+**NOTE**: This exact same issue affects **Notify steps** (shapetype="notify") as well — full escaping patterns in `references/guides/boomi_error_reference.md` Issue #1.
 
 ## **CRITICAL GOTCHA WARNING - QUOTE ESCAPING**
 **Single quotes around JSON/XML completely disable variable substitution - NO ERROR IS SHOWN!**
@@ -61,14 +59,6 @@ Before reading anything else, understand this critical pattern:
 ```
 **Output**: `{"result": "hello", "status": "world"}` 
 
-## Parameter Substitution: XML Element Order
-**Parameters substitute based on XML element order, NOT the key attribute:**
-- `{1}` → first `<parametervalue>` element
-- `{2}` → second `<parametervalue>` element
-- `{3}` → third `<parametervalue>` element
-
-**The `key` attribute is ignored at runtime** - it's a GUI-assigned configuration time identifier that persists through edits.
-
 ## Configuration Structure
 ```xml
 <shape image="message_icon" name="[shapeName]" shapetype="message" userlabel="[label]" x="[x]" y="[y]">
@@ -76,7 +66,7 @@ Before reading anything else, understand this critical pattern:
     <message combined="false">
       <msgTxt>[template content with {1} placeholders]</msgTxt>
       <msgParameters>
-        <parametervalue key="[1-based index]" valueType="[type]">
+        <parametervalue key="[arbitrary id — GUI writes a 0-based sequence]" valueType="[type]">
           <!-- Value configuration based on type -->
         </parametervalue>
       </msgParameters>
@@ -89,145 +79,10 @@ Before reading anything else, understand this critical pattern:
 ```
 
 ## Parameter Value Types
-- **static**: Hard-coded values
-- **track**: References to DDPs or DPPs
-- **profile**: References to profile elements
-- **current**: The current document content
-- **date**: Date/time values (current or relative)
 
-### Profile Element ID Mapping
-**CRITICAL:** When referencing profile elements, the `elementId` must match the `key` attribute from the profile XML, and `elementName` must follow the GUI display format.
+Message parameters accept the full standard parameter value set. **See `references/guides/parameter_value_types.md`** for the GUI picker mapping, per-type XML forms, valid valueTypes, substitution/evaluation rules (placeholders map to elements by order — keys are ignored and may have gaps; misses substitute literal `null`; default fallback semantics), Profile Element ID Mapping, and `trackparameter` GUI display requirements.
 
-**Profile XML structure:**
-```xml
-<XMLElement dataType="character" key="6" name="Name" ...>           <!-- Root level -->
-<XMLElement dataType="character" key="61" name="Name" ...>          <!-- Nested: Account/Name -->
-<XMLElement dataType="character" key="149" name="Email" ...>        <!-- Nested: Owner/Email -->
-```
-
-**Correct reference with GUI format:**
-```xml
-<!-- Root-level field -->
-<parametervalue key="1" valueType="profile">
-  <profileelement elementId="6" elementName="Name (Opportunity/Name)" profileId="..." profileType="profile.xml"/>
-</parametervalue>
-
-<!-- Nested field (1 level) -->
-<parametervalue key="2" valueType="profile">
-  <profileelement elementId="61" elementName="Name (Opportunity/Account/Name)" profileId="..." profileType="profile.xml"/>
-</parametervalue>
-
-<!-- Nested field (2 levels) -->
-<parametervalue key="3" valueType="profile">
-  <profileelement elementId="149" elementName="Email (Opportunity/Owner/Email)" profileId="..." profileType="profile.xml"/>
-</parametervalue>
-```
-
-**elementName Format Rule:**
-- Pattern: `FieldName (RootElement/Full/Path/To/FieldName)`
-- Use the final segment as the field name before the parentheses
-- Include complete XPath from document root in parentheses
-- This format ensures proper GUI display (runtime ignores it but human readability requires correct format)
-
-**Wrong - causes incorrect GUI display:**
-```xml
-<profileelement elementId="6" elementName="Name" .../>              <!-- Missing path notation -->
-<profileelement elementId="61" elementName="Account/Name" .../>     <!-- Wrong format -->
-```
-
-To find the correct `elementId`, you MUST search the profile XML for `<XMLElement ... name="FieldName"` and use its `key` attribute value.
-
-## Date Parameter Patterns
-
-**Current datetime:**
-```xml
-<parametervalue key="N" valueType="date">
-  <dateparameter dateparametertype="current" datetimemask="yyyyMMdd HHmmss.SSS"/>
-</parametervalue>
-```
-
-**Relative datetime (with offset):**
-```xml
-<parametervalue key="N" valueType="date">
-  <dateparameter dateparametertype="relative" datetimemask="yyyyMMdd HHmmss.SSS">
-    <datedelta sign="minus" unit="minutes" value="73"/>
-  </dateparameter>
-</parametervalue>
-```
-
-**Units:** seconds, minutes, hours, days, weeks, months
-**Signs:** plus, minus
-
-## Parameter Substitution Rules
-
-**XML element order determines substitution:**
-```xml
-<msgTxt>Hello {1}, your order {2} totals ${3}</msgTxt>
-<msgParameters>
-  <!-- {1} → first element (key value irrelevant) -->
-  <parametervalue key="0" valueType="track">
-    <trackparameter propertyId="dynamicdocument.DDP_CUSTOMER_NAME"/>
-  </parametervalue>
-  <!-- {2} → second element -->
-  <parametervalue key="1" valueType="track">
-    <trackparameter propertyId="dynamicdocument.DDP_ORDER_ID"/>
-  </parametervalue>
-  <!-- {3} → third element -->
-  <parametervalue key="2" valueType="track">
-    <trackparameter propertyId="dynamicdocument.DDP_ORDER_TOTAL"/>
-  </parametervalue>
-</msgParameters>
-```
-
-**Key values can have gaps** (from GUI deletions) without affecting substitution:
-```xml
-<msgTxt>{1} {2} {3}</msgTxt>
-<msgParameters>
-  <parametervalue key="2" valueType="static"><staticparameter staticproperty="first"/></parametervalue>
-  <parametervalue key="4" valueType="static"><staticparameter staticproperty="second"/></parametervalue>
-  <parametervalue key="5" valueType="static"><staticparameter staticproperty="third"/></parametervalue>
-</msgParameters>
-<!-- Output: "first second third" -->
-```
-
-**This applies to Notify steps as well** - both use XML element order for parameter substitution.
-
-## **CRITICAL GUI Display Requirements**
-
-**A Programmatic Generation Gotcha**: Missing display attributes cause "null" values in Boomi GUI even though the message step works at runtime.
-
-### **Required Attributes for GUI Rendering**
-
-**Every `<trackparameter>` element MUST include:**
-- **propertyName="Dynamic Document Property - DDP_XXX"** - Human-readable property label for GUI
-- **defaultValue=""** - Initializes the default value field (can be empty)
-
-### **WRONG Pattern - Causes GUI Display Issues**
-```xml
-<!-- Missing GUI display attributes -->
-<parametervalue key="1" valueType="track">
-  <trackparameter propertyId="dynamicdocument.DDP_ORDER_ID"/>
-</parametervalue>
-```
-**Result**: Works at runtime but shows "null" entries in Boomi GUI
-
-### **CORRECT Pattern - Full GUI Compatibility**
-```xml
-<!-- Complete attributes for proper GUI rendering -->
-<parametervalue key="1" valueType="track">
-  <trackparameter defaultValue="" propertyId="dynamicdocument.DDP_ORDER_ID"
-                  propertyName="Dynamic Document Property - DDP_ORDER_ID"/>
-</parametervalue>
-```
-**Result**: Works at runtime AND displays properly in Boomi GUI
-
-### **Why This Matters**
-- **Runtime**: Process executes correctly either way
-- **GUI Experience**: Missing attributes cause confusing "null" displays
-- **Team Development**: Other developers see proper labels when reviewing/modifying components
-- **Debugging**: Clear property names aid troubleshooting
-
-**Note**: This same pattern applies to Notify steps - both Message and Notify steps use identical `<trackparameter>` syntax.
+Message-specific note: `valueType="current"` resolves the document *entering* the Message step — the inbound document the template output replaces.
 
 ## REMINDER Quote Escaping Rules (CRITICAL)
 Single quotes toggle between "variable substitution mode" and "literal mode":
@@ -321,6 +176,8 @@ The `combined` attribute controls document aggregation behavior:
 <message combined="true">    <!-- Combine all documents into single output -->
 ```
 
+With `combined="true"` the template is evaluated once per input document — document-scoped parameters (`track`, `current`, `profile`) resolve against each document, and `keygen`/`unique` advance per document — then the rendered instances concatenate in document order into a single output document. The attribute changes output packaging only; parameter evaluation is identical to `combined="false"`.
+
 **Use combined="true" for:**
 - Aggregating multiple document values into single output
 - Collecting fields from many documents into one DPP for use on subsequent branch
@@ -413,8 +270,7 @@ Replace with these CORRECT patterns:
 **3. Verification Checklist**
 - [ ] Each `{N}` variable is surrounded by quote toggles: `"'{N}'"`
 - [ ] No variables appear between single quotes without toggles
-- [ ] Parameter keys are 1-based: key="1", key="2", key="3"
-- [ ] Parameter keys match placeholder numbers exactly
+- [ ] Placeholder numbers `{1}…{n}` match the count and XML order of `<parametervalue>` elements (`key` values are irrelevant)
 
 **4. Test the Fix**
 - Deploy the corrected process

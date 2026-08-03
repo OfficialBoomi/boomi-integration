@@ -193,7 +193,7 @@ Follows standard map function patterns (see `map_component_functions.md`). The `
 
 ## Cross Reference Lookup as Parameter Value Source
 
-Cross reference lookups can be used anywhere a parameter value is accepted (Set Properties, Message, Notify steps) via `valueType="crossref"`. In this approach the lookup will only return a single field.
+Cross reference lookups can be used anywhere a parameter value is accepted via `valueType="crossref"` (see `references/guides/parameter_value_types.md`). In this approach the lookup will only return a single field.
 
 ### Single-Input Lookup (Set Properties)
 

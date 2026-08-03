@@ -65,6 +65,8 @@ When using Event Streams Listen as a start step, the process element should incl
 
 See `components/process_component.md` for the full decision table of recommended process options by start step type.
 
+> **Runtime prerequisite:** on a cloud runtime, Listen needs an execution worker enabled, or the process deploys clean but never attaches (zero executions). If a deployed Listen produces nothing after repeated triggers, prompt the user to check for an execution worker and offer the Consume alternative. See `platform_entities/event_streams.md` § Operation Selection Guide. Single-tenant runtimes are exempt.
+
 ## Event Streams Producer Step
 
 Used to publish messages to an Event Streams topic.

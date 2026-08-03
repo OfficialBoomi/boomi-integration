@@ -4,10 +4,8 @@
 - Purpose
 - Quote Escaping Warning
 - Configuration Structure
-- Parameter Value Types
-- Date Parameter Patterns
-- Critical Parameter Indexing Rules
-- Critical GUI Display Requirements
+- perExecution Attribute Behavior
+- Parameter Value Types (full reference: `references/guides/parameter_value_types.md`)
 - Common Patterns
 - Reference XML Examples
 - Troubleshooting
@@ -52,7 +50,7 @@ Notify steps have the same quote escaping behavior as Message steps. However, **
       <notifyMessage>[Message with {1} placeholders]</notifyMessage>
       <notifyMessageLevel>INFO</notifyMessageLevel>
       <notifyParameters>
-        <parametervalue key="[1-based index]" valueType="[type]">
+        <parametervalue key="[arbitrary id — GUI writes a 0-based sequence]" valueType="[type]">
           <!-- Value configuration based on type -->
         </parametervalue>
       </notifyParameters>
@@ -68,103 +66,41 @@ Notify steps have the same quote escaping behavior as Message steps. However, **
 
 The `perExecution` attribute controls how many times the Notify step executes:
 
-| perExecution | Execution Mode | Document Context | Can Access DDPs |
-|--------------|----------------|------------------|-----------------|
-| `false` (default) | Once per document | Yes | Yes |
-| `true` | Once per execution | No | **No - causes error** |
-
-### When perExecution="true" Causes Errors
-
-The error `Attempting dynamic document property extraction with no document` occurs when:
-1. The notify step has `perExecution="true"` AND
-2. That step's parameters reference document-level data (DDPs, current data, profile elements)
+| perExecution | Execution Mode | Document Context |
+|--------------|----------------|------------------|
+| `false` (default) | Message evaluated once per document (keygen/unique produce a new value per document) | Yes |
+| `true` | One aggregated evaluation per execution | No — document-scoped parameters **cause an error** |
 
 ### Safe Use of perExecution="true"
 
-**DO use** when your Notify message uses only:
+**DO use** when your Notify parameters need no document context:
 - Static text
-- Process Properties (DPPs)
-- Date parameters
+- Date/Time parameters
+- Execution Properties
+- Dynamic Process Properties (DPPs, `valueType="process"`)
+- Process Property components (`valueType="definedparameter"`)
+- Sequential Value (`keygen`) and Unique Value (`unique`) — evaluated once for the single aggregated entry
 
-**DON'T use** when your Notify message references:
-- Dynamic Document Properties (DDPs)
-- Current document content (`valueType="current"`)
-- Profile element values
+**DON'T use** with document-scoped parameters — each fails the path with a type-specific error:
+
+| Parameter type | Error |
+|---|---|
+| `track` (any document property, incl. DDPs) | `Attempting dynamic document property extraction with no document` |
+| `current` | `Attempting document content extraction with no document` |
+| `profile` | `Attempting profile value extraction with no document` |
+
+A `trackparameter defaultValue` does not prevent the failure — extraction is attempted before the fallback. The failure sets the execution to ERROR and blocks downstream steps on that path.
 
 `perExecution="true"` does not clear or destroy DDPs. Documents continue flowing to subsequent steps with all DDPs intact. The attribute only affects whether that specific Notify step has document context available. **Important** If the notify step attempts to reference document level data it will hard-break the process and block further execution down that path.
 
 ## Parameter Value Types
-- **current**: Logs the entire current document
-- **track**: References DDPs only (for DPPs, use `valueType="process"`)
-- **process**: References process properties
-- **static**: Hard-coded values
-- **date**: Date/time values (current or relative)
 
-Only the types listed above are valid. Other valueTypes (e.g. `document`, `currentdata`) will cause HTTP 400 errors on push.
+Notify parameters accept the full standard parameter value set. **See `references/guides/parameter_value_types.md`** for the GUI picker mapping, per-type XML forms, valid valueTypes, substitution/evaluation rules (placeholders map to elements by order, misses substitute literal `null`, default fallback semantics), and `trackparameter` GUI display requirements.
 
-## Date Parameter Patterns
-
-**Current datetime:**
-```xml
-<parametervalue key="N" valueType="date">
-  <dateparameter dateparametertype="current" datetimemask="yyyyMMdd HHmmss.SSS"/>
-</parametervalue>
-```
-
-**Relative datetime (with offset):**
-```xml
-<parametervalue key="N" valueType="date">
-  <dateparameter dateparametertype="relative" datetimemask="yyyyMMdd HHmmss.SSS">
-    <datedelta sign="minus" unit="minutes" value="73"/>
-  </dateparameter>
-</parametervalue>
-```
-
-**Units:** seconds, minutes, hours, days, weeks, months
-**Signs:** plus, minus
-
-## Parameter Substitution: XML Element Order
-**Parameters substitute based on XML element order, NOT the key attribute:**
-- `{1}` → first `<parametervalue>` element
-- `{2}` → second `<parametervalue>` element
-- `{3}` → third `<parametervalue>` element
-
-**The `key` attribute is ignored at runtime** - it's a GUI-assigned configuration time identifier that persists through edits.
-
-## **CRITICAL GUI Display Requirements**
-
-**A Programmatic Generation Gotcha**: Missing display attributes cause "null" values in Boomi GUI even though the notify step works at runtime.
-
-### **Required Attributes for GUI Rendering**
-
-**Every `<trackparameter>` element MUST include:**
-- **propertyName="Dynamic Document Property - DDP_XXX"** - Human-readable property label for GUI
-- **defaultValue=""** - Initializes the default value field (can be empty)
-
-### **WRONG Pattern - Causes GUI Display Issues**
-```xml
-<!-- Missing GUI display attributes -->
-<parametervalue key="1" valueType="track">
-  <trackparameter propertyId="dynamicdocument.DDP_CITY"/>
-</parametervalue>
-```
-**Result**: Works at runtime but shows "null" entries in Boomi GUI
-
-### **CORRECT Pattern - Full GUI Compatibility**
-```xml
-<!-- Complete attributes for proper GUI rendering -->
-<parametervalue key="1" valueType="track">
-  <trackparameter defaultValue="" propertyId="dynamicdocument.DDP_CITY"
-                  propertyName="Dynamic Document Property - DDP_CITY"/>
-</parametervalue>
-```
-**Result**: Works at runtime AND displays properly in Boomi GUI
-
-### **Why This Matters**
-- **Runtime**: Process executes correctly either way
-- **GUI Experience**: Missing attributes cause confusing "null" displays
-- **Team Development**: Other developers see proper labels when reviewing/modifying components
-- **Debugging**: Clear property names aid troubleshooting
+Notify-specific notes:
+- `perExecution="true"` restricts which types are usable — see perExecution Attribute Behavior above.
+- To log a caught error on a Try/Catch path, use `track` with `meta.base.catcherrorsmessage` (the `errormessage` valueType does NOT resolve caught errors — it substitutes `null`).
+- `keygen` and `unique` produce a new value per document when `perExecution="false"`.
 
 ## Common Patterns
 - Log API responses after connector calls
@@ -191,7 +127,7 @@ Only the types listed above are valid. Other valueTypes (e.g. `document`, `curre
 </shape>
 ```
 
-### Logging Process Property
+### Logging a Dynamic Process Property (DPP)
 ```xml
 <shape image="notify_icon" name="shape10" shapetype="notify" userlabel="" x="432.0" y="368.0">
   <configuration>
@@ -209,6 +145,30 @@ Dynamic Process Properties from a previous branch are carried into subsequent br
   </configuration>
   <dragpoints>
     <dragpoint name="shape10.dragpoint1" toShape="shape11" x="608.0" y="376.0"/>
+  </dragpoints>
+</shape>
+```
+
+### Logging a Process Property Component Value and Execution Metadata
+```xml
+<shape image="notify_icon" name="shape5" shapetype="notify" userlabel="Log config + execution id" x="656.0" y="48.0">
+  <configuration>
+    <notify disableEvent="true" enableUserLog="false" perExecution="false" title="">
+      <notifyMessage>BatchSize={1} Execution={2}</notifyMessage>
+      <notifyMessageLevel>INFO</notifyMessageLevel>
+      <notifyParameters>
+        <parametervalue key="0" usesEncryption="false" valueType="definedparameter">
+          <definedprocessparameter componentId="[componentGuid]" componentName="[Component Name]"
+                                   propertyKey="[propertyGuid]" propertyLabel="BatchSize"/>
+        </parametervalue>
+        <parametervalue key="1" usesEncryption="false" valueType="execution">
+          <executionparameter executionproperty="Execution Id"/>
+        </parametervalue>
+      </notifyParameters>
+    </notify>
+  </configuration>
+  <dragpoints>
+    <dragpoint name="shape5.dragpoint1" toShape="shape6" x="832.0" y="56.0"/>
   </dragpoints>
 </shape>
 ```
@@ -239,4 +199,10 @@ Dynamic Process Properties from a previous branch are carried into subsequent br
 - For complex JSON patterns, use single-quote toggle for curly-brace substitution (see references/guides/boomi_error_reference.md Issue #1)
 
 **"null" displays in GUI?**
-- Add `propertyName` and `defaultValue` attributes to `<trackparameter>` elements (see GUI Display Requirements above)
+- Add `propertyName` and `defaultValue` attributes to `<trackparameter>` elements (see `references/guides/parameter_value_types.md` → GUI Display Requirements)
+
+**Literal `null` in the logged message?**
+- A lookup parameter failed to resolve: cross reference miss, document cache miss/unpopulated cache, or profile element on an empty document. These substitute `null` without erroring.
+
+**Process errors at the Notify step with `... extraction with no document`?**
+- The step has `perExecution="true"` and a document-scoped parameter (`track`, `current`, or `profile`). See perExecution Attribute Behavior above.

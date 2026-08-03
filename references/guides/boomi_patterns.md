@@ -88,9 +88,9 @@ Essential debug points during development:
 
 ### Debugging with Notify Steps
 
-Add Notify steps after Message steps, connector calls, Set Properties steps to validate behavior during development. Use `valueType="current"` for document content, `valueType="track"` for DDPs.
+Add Notify steps after Message steps, connector calls, Set Properties steps to validate behavior during development. Use `valueType="current"` for document content, `valueType="track"` for DDPs. Notify parameters can also read DPPs (`process`), Process Property components (`definedparameter`), profile elements (`profile`), and execution metadata (`execution`) directly — no need to stage a value into a DDP/DPP just to log it (see references/guides/parameter_value_types.md for the full type table).
 
-**Critical gotchas**: Notify steps have IDENTICAL quote escaping issues as Message steps with single-quote toggle for curly-brace substitution (see references/guides/boomi_error_reference.md Issue #1 for comprehensive patterns). Parameter keys are 1-based: key="1", key="2" (not 0-based).
+**Critical gotchas**: Notify steps have IDENTICAL quote escaping issues as Message steps with single-quote toggle for curly-brace substitution (see references/guides/boomi_error_reference.md Issue #1 for comprehensive patterns). Parameter `key` values are arbitrary config-time identifiers (the GUI writes a 0-based sequence); substitution follows XML element order.
 
 **Production cleanup**: Remove test payloads or re-route around them intelligently before deployment.
 

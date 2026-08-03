@@ -56,7 +56,7 @@ The catch path typically leads to a notify step that displays the error message:
   </configuration>
 </shape>
 ```
-**Note:** Placeholders are 1-based (`{1}`, `{2}`, `{3}`) and map to `<parametervalue>` elements by XML order, not key attribute. See references/steps/notify_step.md for complete parameter substitution rules and XML reference.
+**Note:** Placeholders are 1-based (`{1}`, `{2}`, `{3}`) and map to `<parametervalue>` elements by XML order, not key attribute. See references/guides/parameter_value_types.md for complete parameter substitution rules and XML reference.
 
 ## Configuration Elements
 

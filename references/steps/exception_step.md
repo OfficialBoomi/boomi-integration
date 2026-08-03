@@ -44,13 +44,9 @@ Exception is a terminal shape — `<dragpoints/>` is always empty/self-closing.
 | `title` | string | | Descriptive title for the exception configuration. Appears in the GUI. |
 
 ## Parameters
-Exception message parameters follow the same rules as Notify and Message steps:
-- Substitution is by XML element order, not `key` attribute
-- Same `valueType` options: `static`, `track`, `process`, `current`, `date`, `profile`
-- Same `<trackparameter>` GUI display requirements (`propertyName` and `defaultValue` attributes)
-- Same single-quote escaping behavior
+Exception message parameters accept the full standard parameter value set. See `references/guides/parameter_value_types.md` for the type table, XML forms, substitution rules (placeholders map to elements by order), and `trackparameter` GUI display requirements. Message text uses single-quote escaping — see `references/guides/boomi_error_reference.md` Issue #1.
 
-See `references/steps/notify_step.md` for full parameter and escaping details.
+The rendered message — with substituted values — propagates verbatim to the process log SEVERE line and the ExecutionRecord `message` field. Lookup misses render as the literal string `null` and do not alter or preempt the exception itself.
 
 ## XML Reference
 

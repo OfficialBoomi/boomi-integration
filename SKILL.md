@@ -33,7 +33,7 @@ Run scripts from the project workspace directory (so `.env` and `active-developm
 - **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
 - **Disk V2 (File System)**: diskv2_connection_component + diskv2_connector_operation_component + diskv2_connector_step
 - **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
-- **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments)
+- **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments). For existing `connectorType="mail"` assets, see mail_component.md instead
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
 - **Agent Step (AI Agent in process)**: agent_step.md
 - **Flow Services**: fss_operation_component + fss_start_step + flow_service_component + platform_entities/flow.md
@@ -93,6 +93,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── pulling_components.md        # Read when: user provides platform URL or component ID to work on
 │   │   ├── process_testing_guide.md     # Read when: deploying and testing processes - execution workflows, log analysis
 │   │   ├── api_conversion_patterns.md   # Read when: converting process to API or building WSS listeners
+│   │   ├── parameter_value_types.md     # Use when: configuring `<parametervalue>` elements anywhere (Notify/Message placeholders, Set Properties source values, connector/lookup inputs)
 │   │   ├── boomi_patterns.md            # Step-by-step implementation recipes for common scenarios
 │   │   ├── boomi_error_reference.md     # Error patterns, silent failures, and troubleshooting
 │   │   ├── problem_solving_guide.md     # Tiered escalation framework for unknown components, unexpected behavior, undocumented scenarios
@@ -141,6 +142,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── mft_connector_operation_component.md # Use when: defining MFT operations - file pickup, drop-off, status updates
 │   │   ├── mail_imap_connection_component.md   # connectorType: "mailsdk". Use when: creating Mail (IMAP) connections - SMTP outbound + IMAP inbound, Basic Auth or OAuth 2.0, connection security (NONE/SSL_TLS/STARTTLS)
 │   │   ├── mail_imap_connector_operation_component.md # Use when: defining Mail (IMAP) operations - Receive (query with filters, attachment cache), Send (with attachments via cache), Move (folder-to-folder with request profile)
+│   │   ├── mail_component.md                 # connectorType: "mail" — Mail (legacy, SMTP send + POP3 get). Use when: working with existing Mail assets or when the user explicitly requests Mail. Never choose over Mail (IMAP) on agent judgment alone. NOT Mail (IMAP)
 │   │   ├── web_services_server_start_shape_operation.md # connectorType: "wss". Use when: converting process to API, creating HTTP listener endpoints, defining request/response profiles for Boomi processes to be exposed as web services/ API end points
 │   │   ├── api_service_component.md          # type: "webservice". Use when: deploying REST APIs to Advanced atoms (wraps WSS Listen processes under a curated URL tree; REST only)
 │   │   ├── fss_operation_component.md    # connectorType: "fss". Use when: creating Flow Services Server operations for Flow-callable Integration processes
@@ -163,7 +165,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── custom_connector_step.md # Custom SDK connectors. Use when: using connectors built with Boomi's Java Connector SDK
 │   │   ├── diskv2_connector_step.md # Disk V2 file operations. Use when: reading, writing, querying, listing, or deleting files on local/network file systems
 │   │   ├── mft_connector_step.md    # MFT operations. Use when: picking up or dropping off files via Boomi MFT (Thru)
-│   │   ├── mail_imap_connector_step.md # Mail (IMAP) connector step. Use when: sending email via SMTP, receiving email via IMAP (with attachment handling), or moving messages between mailbox folders
+│   │   ├── mail_imap_connector_step.md # Mail (IMAP) connector step. Use when: sending email via SMTP, receiving email via IMAP (with attachment handling), or moving messages between mailbox folders (for `connectorType="mail"`: see components/mail_component.md)
 │   │   ├── event_streams_steps.md   # Event Streams operations. Use when: pub/sub messaging, event-driven processing, async communication between processes
 │   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes
 │   │   ├── message_step.md      # Template engines for generating content. Use when: building payloads, creating test data, clearing documents

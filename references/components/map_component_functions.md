@@ -840,7 +840,7 @@ All variants share the same shape: `type="DocumentPropertyGet"`, empty `<Inputs/
 **Meta Data key details:**
 - `propertyName` and the output port `name` both use the form `Base - <Label>` (e.g. `Base - Try/Catch Message`).
 - Meta Data properties are **read-only** — populated by the steps above, never by a Set (the Set Document Property picker offers no Meta Data source).
-- These are the same properties other surfaces call **Standard Document Properties** — same IDs and `Base - <Label>` names as the Set Properties parameter-source table (`set_properties_step.md`) and `trackparameter` reads.
+- These are the same properties other surfaces call **Standard Document Properties** — same IDs and `Base - <Label>` names as `trackparameter` reads (see the track namespace table in `references/guides/parameter_value_types.md`).
 - **An unpopulated property returns empty without error**: the function executes cleanly and the mapped target field is **absent** from the output document (not `""`) — the standard empty-function-result behavior. In a process without the populating step, that is the expected outcome for every property except `size`.
 - Values arrive as strings (`size` for a 67-byte document maps as `"67"`) — map into `character` target fields.
 
