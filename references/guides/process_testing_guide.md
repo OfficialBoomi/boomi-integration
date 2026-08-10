@@ -6,7 +6,9 @@
 - Regular Processes (Non-Listener)
 - Web Services Server (WSS) Listener Processes
 - WSS Endpoint URL Construction
+- Execution Workflow
 - Testing Workflow Requirements
+- Instrumenting Processes for Testing
 
 #### **Testing Patterns by Process Type**
 - **WSS Listeners**: HTTP calls with inline JSON, review response payload
@@ -76,7 +78,7 @@ Save this pattern - use it EVERY time:
 
 **Remember:** sentence case means first letter uppercase, so `"hello"` becomes `"Hello"`
 
-**CRITICAL: WSS Endpoint URL Construction**
+#### **CRITICAL: WSS Endpoint URL Construction**
 
 The endpoint URL for a Web Services Server listener is built by concatenating the `operationType` and `objectName` attributes from the WSS operation XML.
 
@@ -278,6 +280,18 @@ Add Notify steps to inspect document payloads and property values during develop
 ```xml
 <parametervalue key="1" valueType="current"/>
 ```
+
+**Reading a payload log when several documents are in flight:** with the default `perExecution="false"`, the message is rendered once per document and all renderings are **concatenated into a single log line with nothing inserted between them** — three documents produce one line containing three payloads back to back. The line is not one malformed document; it is N documents run together.
+
+Make the boundaries legible by putting a label **before** the placeholder, since the whole template repeats per document:
+
+```xml
+<notifyMessage>[DOC] {1} </notifyMessage>
+```
+
+`[DOC]` then appears once per payload. A trailing delimiter also repeats but its last occurrence is right-trimmed by the log, and an embedded newline does not work at all — newlines become single spaces in the process log.
+
+Do **not** reach for `perExecution="true"` to collapse the output: a `current`, `track` or `profile` parameter fails the path under it. See `references/steps/notify_step.md` § perExecution Attribute Behavior.
 
 **Iterative development workflow:**
 1. Build a section of process functionality

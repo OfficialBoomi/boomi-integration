@@ -65,7 +65,14 @@ Each connection is listed by component ID. **Every `<field>` must carry the conn
 - `field id` = the field identifier from the connection's configuration
 - `label` = human-readable name shown in the Boomi GUI extensions tab
 - `overrideable="true"` = configurable per-environment; `overrideable="false"` = listed but fixed
-- `xpath` = the binding from the field to the connection XML attribute it overrides. Required on every field. For the HTTP Client `url` field this is `HttpSettings/@url`.
+- `xpath` = the binding from the field to the connection XML attribute it overrides. Required on every field; a missing or wrong `xpath` leaves the override inert.
+
+Known `xpath` values — for any other connector, obtain the block as described below rather than inferring the pattern:
+
+| Connector | Field | `xpath` |
+|---|---|---|
+| HTTP Client | `url` | `HttpSettings/@url` |
+| REST Client | any field, incl. `password` | `GenericConnectionConfig/field[@id='<fieldId>']/@value` |
 
 **Emit the complete canonical `<ConnectionOverride>` block for the connector type — not a hand-picked subset.** The platform generates the block with every field enumerated, each carrying its own `xpath`, and uses `overrideable` to toggle which ones are configurable. The reliable way to obtain it is to configure the override once in the platform GUI and pull the process component back: the pulled `<bns:processOverrides>` holds the full field list with correct xpaths. Reuse that block and set `overrideable="true"` on the fields you want configurable. Hand-authoring a subset is the common source of missing-`xpath` inert overrides.
 
@@ -147,7 +154,11 @@ When constructing payloads, prefer `boomi-extensions.sh get` → modify → `set
 
 ### Encrypted fields
 
-GET omits the value for fields with `encryptedValueSet: true`, returning only the metadata flags. On POST, a field block with no `value` key is treated as no-change, so a GET → edit other keys → POST round-trip updates surrounding fields without reading or disturbing the stored secret. 
+GET omits the value for fields with `encryptedValueSet: true`, returning only the metadata flags. On POST, a field block with no `value` key is treated as no-change, so a GET → edit other keys → POST round-trip updates surrounding fields without reading or disturbing the stored secret.
+
+The Component API has no equivalent no-change semantic, which is why an extension is the safe home for a REST Client connection password — see `references/components/rest_connection_component.md` § Password Encryption.
+
+Extension *value* changes take effect on the next execution — no redeploy. Declarations ship in the deployed package and do require one.
 
 Advise the users to input their secrets in the platform GUI. Mechanically it is possible to create a new secret if the user explicitly asks for it. This is a non-standard approach, but we do not dictate their preferred workflow.
 

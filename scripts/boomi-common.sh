@@ -12,6 +12,7 @@ load_env() {
     set -a
     source "$env_file"
     set +a
+    _set_user_agent   # .env must not override the header
   else
     echo "ERROR: .env file not found in $(pwd)" >&2
     exit 1
@@ -51,14 +52,15 @@ _skill_version() {
   cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null || echo "unknown"
 }
 
-_skill_name() {
-  basename "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" 2>/dev/null || echo "unknown"
-}
-
 # --- Constants ---
 
-BOOMI_SKILL_NAME="${BOOMI_SKILL_NAME:-$(_skill_name)}"
-BOOMI_USER_AGENT="boomi-companion/${BOOMI_SKILL_NAME}/$(_skill_version)"
+# Skill name is a literal — standalone installs may rename the directory.
+# A function because load_env re-calls it after sourcing .env, so the
+# User-Agent cannot be poisoned.
+_set_user_agent() {
+  BOOMI_USER_AGENT="boomi-companion/boomi-integration/$(_skill_version)"
+}
+_set_user_agent
 
 # --- API helpers ---
 
@@ -117,6 +119,270 @@ boomi_api() {
   else
     RESPONSE_BODY=""
   fi
+}
+
+# --- Query pagination ---
+
+# Appends `.result` arrays from a `/query` + `/queryMore` loop into pages_file
+# (one JSON array per line; consume with `jq --slurpfile` to avoid ARG_MAX).
+# Sets TOTAL_COUNT from the first page.
+TOTAL_COUNT=0
+paginate_query() {
+  local endpoint="$1"
+  local body="$2"
+  local pages_file="$3"
+
+  local url; url="$(build_api_url "${endpoint}/query" false)"
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "$body"
+
+  if [[ "$RESPONSE_CODE" != "200" ]]; then
+    echo "ERROR: ${endpoint}/query failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
+    return 1
+  fi
+
+  echo "$RESPONSE_BODY" | jq -c '.result // []' >> "$pages_file"
+  TOTAL_COUNT=$(echo "$RESPONSE_BODY" | jq -r '.numberOfResults // 0')
+  local token; token=$(echo "$RESPONSE_BODY" | jq -r '.queryToken // empty')
+
+  while [[ -n "$token" ]]; do
+    local more_url; more_url="$(build_api_url "${endpoint}/queryMore" false)"
+    boomi_api -X POST "$more_url" \
+      -H "Accept: application/json" \
+      -H "Content-Type: text/plain" \
+      -d "$token"
+
+    if [[ "$RESPONSE_CODE" != "200" ]]; then
+      echo "WARN: ${endpoint}/queryMore failed (HTTP ${RESPONSE_CODE}); returning partial results." >&2
+      break
+    fi
+    echo "$RESPONSE_BODY" | jq -c '.result // []' >> "$pages_file"
+    token=$(echo "$RESPONSE_BODY" | jq -r '.queryToken // empty')
+  done
+}
+
+# --- Folder helpers ---
+#
+# fullPath is returned by Folder/query but not queryable, so path matching here
+# is client-side. Folder queries are unfiltered on deleted by default, so every
+# helper pins deleted=false.
+
+FOLDER_ID_BATCH="${FOLDER_ID_BATCH:-200}"    # ids per OR expression; ~20KB request body
+# Subtree cap, bound by folder_descendants' string accumulator rather than the
+# API: the walk is quadratic in folder count.
+FOLDER_SCOPE_MAX="${FOLDER_SCOPE_MAX:-1000}"
+
+# Folder/query with the given expression AND deleted=false.
+# Emits `id<TAB>name<TAB>fullPath<TAB>parentId` per line.
+folder_query_records() {
+  local expr="$1"
+  local body pages records
+  body=$(jq -cn --argjson e "$expr" '{QueryFilter:{expression:{
+    operator:"and",
+    nestedExpression:[$e, {operator:"EQUALS",property:"deleted",argument:["false"]}]
+  }}}')
+  pages=$(mktemp)
+  if ! paginate_query "Folder" "$body" "$pages"; then
+    rm -f "$pages"; return 1
+  fi
+  if ! records=$(jq -r '.[] | [.id, .name, .fullPath, (.parentId // "")] | @tsv' "$pages"); then
+    rm -f "$pages"; return 1
+  fi
+  rm -f "$pages"
+  [[ -n "$records" ]] && printf '%s\n' "$records"
+  return 0
+}
+
+# Warn when a pattern/path resolves to more folders than the cap. The non-recursive
+# union path has no cap of its own, so this is its only oversized-scope signal.
+_folder_match_count_warn() {
+  local input="$1" records="$2" count
+  count=$(printf '%s\n' "$records" | grep -c . || true)
+  if [[ "$count" -gt "$FOLDER_SCOPE_MAX" ]]; then
+    echo "WARN: '${input}' matched ${count} folders, over the ${FOLDER_SCOPE_MAX}-folder cap. Narrow the pattern; a recursive walk of this scope will be truncated." >&2
+  fi
+}
+
+_folder_scope_cap_warn() {
+  echo "WARN: folder scope hit the ${FOLDER_SCOPE_MAX}-folder cap; results are truncated. Narrow the folder rather than raising FOLDER_SCOPE_MAX." >&2
+}
+
+# '%' LIKE pattern → shell glob (escaping metacharacters that are literal in LIKE).
+_folder_pattern_to_glob() {
+  local p="$1"
+  p="${p//\\/\\\\}"
+  p="${p//\*/\\*}"
+  p="${p//\?/\\?}"
+  p="${p//\[/\\[}"
+  printf '%s' "${p//%/*}"
+}
+
+# Resolve a folder reference → `id<TAB>name<TAB>fullPath<TAB>parentId` lines.
+# Errors on 0 matches. Input forms, in precedence order:
+#   '/' in input → path: query the last segment, then match fullPath client-side
+#   '%' in input → LIKE on name, all matches
+#   otherwise    → EQUALS id, then EQUALS name (>1 name match is ambiguous → error)
+resolve_folder_scope() {
+  local input="$1"
+  local records
+
+  if [[ "$input" == *"/"* ]]; then
+    local leaf="${input##*/}"
+    local op="EQUALS"
+    [[ "$leaf" == *"%"* ]] && op="LIKE"
+    if ! records=$(folder_query_records \
+        "$(jq -cn --arg o "$op" --arg v "$leaf" '{operator:$o,property:"name",argument:[$v]}')"); then
+      return 1
+    fi
+    local matched="" id name path parent
+    if [[ "$input" == *"%"* ]]; then
+      local glob; glob="$(_folder_pattern_to_glob "$input")"
+      while IFS=$'\t' read -r id name path parent; do
+        [[ -z "$id" ]] && continue
+        # shellcheck disable=SC2254  # glob is intentionally unquoted
+        if [[ "$path" == $glob || "$path" == */$glob ]]; then
+          matched+="${id}	${name}	${path}	${parent}"$'\n'
+        fi
+      done <<< "$records"
+    else
+      while IFS=$'\t' read -r id name path parent; do
+        [[ -z "$id" ]] && continue
+        if [[ "$path" == "$input" || "$path" == *"/$input" ]]; then
+          matched+="${id}	${name}	${path}	${parent}"$'\n'
+        fi
+      done <<< "$records"
+    fi
+    if [[ -z "$matched" ]]; then
+      echo "ERROR: No folder path matched '${input}'. Paths are matched against Folder.fullPath (e.g. 'Account/Parent/Child'); a '/'-anchored trailing portion is enough, and % wildcards work in any segment." >&2
+      return 1
+    fi
+    _folder_match_count_warn "$input" "$matched"
+    printf '%s' "$matched"
+    return 0
+  fi
+
+  if [[ "$input" == *"%"* ]]; then
+    if ! records=$(folder_query_records \
+        "$(jq -cn --arg v "$input" '{operator:"LIKE",property:"name",argument:[$v]}')"); then
+      return 1
+    fi
+    if [[ -z "${records//[[:space:]]/}" ]]; then
+      echo "ERROR: No folders matched pattern '${input}'." >&2
+      return 1
+    fi
+    _folder_match_count_warn "$input" "$records"
+    printf '%s\n' "$records"
+    return 0
+  fi
+
+  # Folder ids are base64 "F:<n>", so always Rjo-prefixed (cf. resolve_branch_id).
+  if [[ "$input" == Rjo* ]]; then
+    records=$(folder_query_records \
+      "$(jq -cn --arg v "$input" '{operator:"EQUALS",property:"id",argument:[$v]}')" 2>/dev/null) || records=""
+    if [[ -n "${records//[[:space:]]/}" ]]; then
+      printf '%s\n' "$records"
+      return 0
+    fi
+  fi
+
+  if ! records=$(folder_query_records \
+      "$(jq -cn --arg v "$input" '{operator:"EQUALS",property:"name",argument:[$v]}')"); then
+    return 1
+  fi
+  if [[ -z "${records//[[:space:]]/}" ]]; then
+    echo "ERROR: Folder '${input}' not found (by id or exact name). Use % wildcards for LIKE matching, or a path like 'Parent/Child'." >&2
+    return 1
+  fi
+  local count; count=$(printf '%s\n' "$records" | grep -c . || true)
+  if [[ "$count" -gt 1 ]]; then
+    echo "ERROR: Folder name '${input}' matches ${count} folders:" >&2
+    printf '%s\n' "$records" | awk -F'\t' 'NF>0 {print "  " $3 "  (" $1 ")"}' >&2
+    echo "Pass a folder id, a path like 'Parent/${input}', or a % wildcard pattern to accept multiple matches." >&2
+    return 1
+  fi
+  printf '%s\n' "$records"
+}
+
+# Direct children of the folder ids on stdin (records or bare ids), batched
+# FOLDER_ID_BATCH per query. Emits child records on stdout.
+folder_children() {
+  local ids=() id
+  while IFS=$'\t' read -r id _; do
+    [[ -z "$id" ]] && continue
+    ids+=("$id")
+  done
+  [[ ${#ids[@]} -eq 0 ]] && return 0
+
+  local i=0
+  while [[ $i -lt ${#ids[@]} ]]; do
+    local batch=("${ids[@]:i:FOLDER_ID_BATCH}")
+    local exprs=()
+    for id in "${batch[@]}"; do
+      exprs+=("$(jq -cn --arg v "$id" '{operator:"EQUALS",property:"parentId",argument:[$v]}')")
+    done
+    local expr
+    if [[ ${#exprs[@]} -eq 1 ]]; then
+      expr="${exprs[0]}"
+    else
+      expr=$(jq -cn --argjson n "[$(IFS=,; echo "${exprs[*]}")]" '{operator:"or",nestedExpression:$n}')
+    fi
+    if ! folder_query_records "$expr"; then
+      return 1
+    fi
+    i=$((i + FOLDER_ID_BATCH))
+  done
+}
+
+# BFS a subtree from the given root records → roots plus every descendant, as
+# `id<TAB>name<TAB>fullPath<TAB>parentId` lines. Visits each id once.
+# Exit: 0 complete, 1 query failed, 2 truncated at FOLDER_SCOPE_MAX (partial
+# records still on stdout). Callers MUST surface 2, or a partial subtree reads
+# as a complete one.
+folder_descendants() {
+  local roots="$1"
+
+  local seen=" " out="" frontier="" id name path parent total=0
+  # The roots are capped too: a wide pattern ('%', 'Billing/%') can resolve to
+  # more folders than the cap on its own, and if they already cover the tree the
+  # child loop below never runs to catch it.
+  while IFS=$'\t' read -r id name path parent; do
+    [[ -z "$id" ]] && continue
+    [[ "$seen" == *" $id "* ]] && continue
+    if [[ "$total" -ge "$FOLDER_SCOPE_MAX" ]]; then
+      _folder_scope_cap_warn
+      printf '%s' "$out"
+      return 2
+    fi
+    seen+="$id "
+    out+="${id}	${name}	${path}	${parent}"$'\n'
+    frontier+="${id}"$'\n'
+    total=$((total + 1))
+  done <<< "$roots"
+
+  while [[ -n "${frontier//[[:space:]]/}" ]]; do
+    local children
+    if ! children=$(printf '%s' "$frontier" | folder_children); then
+      return 1
+    fi
+    frontier=""
+    while IFS=$'\t' read -r id name path parent; do
+      [[ -z "$id" ]] && continue
+      [[ "$seen" == *" $id "* ]] && continue
+      if [[ "$total" -ge "$FOLDER_SCOPE_MAX" ]]; then
+        _folder_scope_cap_warn
+        printf '%s' "$out"
+        return 2
+      fi
+      seen+="$id "
+      out+="${id}	${name}	${path}	${parent}"$'\n'
+      frontier+="${id}"$'\n'
+      total=$((total + 1))
+    done <<< "$children"
+  done
+
+  printf '%s' "$out"
 }
 
 # --- Branch helpers ---
@@ -284,6 +550,50 @@ sedi() {
   fi
 }
 
+# --- Credential guards ---
+
+# Matches REST Client connection AND operation components — they share this subType.
+# Operations carry no password fields, so the caller is unaffected.
+# Usage: is_rest_connector_component <file>
+is_rest_connector_component() {
+  grep -qE 'subType="officialboomi-[A-Za-z0-9]+-rest(-[^"]*)?"' "$1" 2>/dev/null
+}
+
+# Refuse to write a pulled REST Client secret token back to the platform. Other connectors are
+# not checked. Detects the token form only — an emptied or deleted password field destroys the
+# credential too, but catching that needs prior platform state, so the error text warns instead.
+# Usage: assert_no_password_token <file> [allow:true|false]
+assert_no_password_token() {
+  local file="$1" allow="${2:-false}"
+  [[ "$allow" == "true" ]] && return 0
+  is_rest_connector_component "$file" || return 0
+
+  # Token shape: exactly 128 lowercase hex in a type="password" field value.
+  local ids="" field_tag field_id
+  while IFS= read -r field_tag; do
+    [[ "$field_tag" == *'type="password"'* ]] || continue
+    printf '%s' "$field_tag" | grep -qE '[^a-zA-Z]value="[0-9a-f]{128}"' || continue
+    field_id="?"
+    if [[ "$field_tag" == *' id="'* ]]; then
+      field_id="${field_tag#* id=\"}"
+      field_id="${field_id%%\"*}"
+    fi
+    ids+=" $field_id"
+  done < <(tr '\r\n' '  ' < "$file" | grep -oE '<field[^>]*>' 2>/dev/null || true)
+  [[ -n "$ids" ]] || return 0
+
+  echo "ERROR: refusing to write — REST Client password field(s) hold a pulled secret token:${ids}" >&2
+  echo "That value references the stored secret; writing it makes the token string the credential. The" >&2
+  echo "write and deploy succeed, then auth fails at request time and a later pull still reports" >&2
+  echo "isSet=\"true\", so nothing looks wrong." >&2
+  echo "Fix: do not write this component. Have the user set the password in the Boomi GUI, or move the" >&2
+  echo "secret to an Environment Extension. Do not ask the user for the plaintext to get past this, and" >&2
+  echo "do not empty or delete the field — unchecked, but equally destructive." >&2
+  echo "See references/components/rest_connection_component.md § Password Encryption." >&2
+  echo "If this genuinely is a 128-lowercase-hex credential, re-run with --allow-password-token." >&2
+  exit 1
+}
+
 # --- Sync state ---
 
 # Resolve sync state filename from a component file path
@@ -378,7 +688,7 @@ log_activity() {
 
     jq -cn \
       --arg ts "$timestamp" \
-      --arg name "${BOOMI_SKILL_NAME:-unknown}" \
+      --arg name "boomi-integration" \
       --arg ver "$(_skill_version)" \
       --arg ws "$(basename "$(pwd)")" \
       --arg op "$operation" \

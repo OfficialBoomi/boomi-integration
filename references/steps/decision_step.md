@@ -257,4 +257,4 @@ When chaining multiple decisions:
 1. Order from most to least likely (optimize for common path)
 2. Check for nulls/empty first to avoid errors
 3. Use clear userlabels to document each condition
-4. Consider combining into business rules if > 3-4 decisions
+4. If the chain exists only to validate a document, use a Business Rules step instead — it holds the conditions as named rules in one shape and reports which ones failed (see `references/steps/business_rules_step.md`)

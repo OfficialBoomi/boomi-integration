@@ -172,7 +172,7 @@ A map consumes a UDF as a FunctionStep with `category="userdefined"` and `type="
 - `<Configuration/>` is always empty; the reference carries **no version attribute** (see Update and Redeploy Semantics).
 - Map-level mappings wire profile fields to the UDF exactly as with any function step (`toFunction`/`toKey` in, `fromFunction`/`fromKey` out), and UDF references coexist with standard function steps in the same `<Functions>` list.
 
-Maps are not the only consumers — UDFs can also be embedded in Business Rules steps inside processes. That pattern is not yet implemented in this skill; if you encounter it, inform the user that you don't have documentation for it.
+Maps are not the only consumers — UDFs can also be embedded in Business Rules steps inside processes, as a rule input with `category="userdefined"`. Same embedding grammar as above. See `references/steps/business_rules_step.md`.
 
 ## Update and Redeploy Semantics
 The map's reference to a UDF is unversioned. Packaging a process snapshots the then-current UDF revision:

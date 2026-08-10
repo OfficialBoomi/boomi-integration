@@ -124,7 +124,7 @@ When uncertain, default to technology connectors (REST, Database) over branded o
 - **Technology Connectors (REST, Database, Event Streams)**: Fully programmatic - connections, operations, all configuration via XML
 - **Branded Connectors (Salesforce, NetSuite, Boomi for SAP)**: Require GUI configurations by the user for OAuth flows, metadata import, live discovery, or Core module setup. Reference existing components by ID, or use placeholder pattern when components don't exist yet, or create net new functionality as technology connectors.
 - **MCP Server Connector**: Listener-based connector that exposes Boomi processes as AI-callable tools via Model Context Protocol. Uses Connection (server identity + auth) + Operation (tool definition with JSON schema) + Start Step (listener entry point). Unlike request-based connectors, MCP processes are always listener processes that wait for AI agent invocations. Technology Preview - not production-ready.
-- **Agent Connector** (`connectorType="boomiai"`): Integrates AI agents from Agent Control Tower into processes. Connection + Operation require one-time GUI setup (Component API does not support creating these), but once created they are reusable across any number of programmatically-built processes by ID. Requires a Message step before it to construct the prompt. Output is an SSE event stream; downstream parsing needed to extract the agent's text response.
+- **Agent Connector** (`connectorType="boomiai"`): Integrates AI agents from Agent Control Tower into processes. Connection + Operation are GUI-only and read-only to the Component API — neither can be created nor updated programmatically — but once they exist they are reusable across any number of programmatically-built processes by ID. Any upstream shape that produces a document supplies the prompt; a Message step is common but not required. Output shape follows the agent's response mode: conversational returns an SSE event stream needing downstream parsing, structured returns a single JSON envelope.
 
 **Connection Discovery (recommended before building):**
 
@@ -174,6 +174,9 @@ A separate, spec-driven connector (`connectorType="officialboomi-X3979C-opena2-p
 
 Like REST (above), OpenAPI operations use `requestProfileType`/`responseProfileType`. (Parameters differ, though — defined in cookie metadata, not `customproperties` slots.) See `components/openapi_connector_operation_component.md` and `components/openapi_connection_component.md`.
 
+### Disk Connector Specifics
+**Default every directory value to `work/{purpose}`** (e.g. `work/output`) — both the connection's `directory` field and the `connector.disk-sdk.directory` document property, which is restricted the same way. On cloud runtimes writes are permitted under `work` and its subdirectories; a path outside it fails on execution, not at design time. See `components/diskv2_connection_component.md`.
+
 ## Step Design Principles
 ### Message Steps
 Template engines for generating document content from scratch or with variable substitution. Despite the name, they create document content, not just "send messages".
@@ -211,7 +214,7 @@ A core Boomi value proposition is that integrations are manageable by humans thr
 Scripting is only appropriate when native components genuinely cannot accomplish the task. Before writing any scripting, exhaust these alternatives:
 1. Can Map step handle this transformation? → Use Map (multi-step field logic included — a User-Defined Function chains standard map functions natively)
 2. Can Message step generate this content? → Use Message
-3. Can Decision/Route/Branch handle this routing? → Use Decision/Route/Branch
+3. Can Decision/Route/Branch handle this routing? → Use Decision/Route/Branch (for multi-condition validation, a Business Rules step holds many named rules in one shape and reports which failed)
 4. Can Set Properties + concatenation solve this? → Use Set Properties
 5. Can a subprocess with native components accomplish this? → Use subprocess
 6. **None of the above work?** → Groovy, kept under 50 lines
@@ -267,6 +270,19 @@ The `<dragpoints>` element is **required** on every shape — omitting it causes
 `<dragpoint>` children represent wired connections via `toShape="shapeN"`. For unwired output paths (e.g., a TP Send Errors path not yet connected), use `toShape="unset"` — this is the conventional representation and is preserved exactly by the platform. The GUI renders available output paths based on shapetype and configuration, independent of what `<dragpoint>` children exist in the XML.
 
 Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring at the API level — some paths wired, others with `toShape="unset"`. However, always wire all paths to a downstream step (even if just a Stop step) as a best practice.
+
+**Dragpoint `x`/`y` are cosmetic.** They survive an API round trip exactly as authored, but they do not control the path a connector line takes, and the GUI regenerates return-path dragpoint coordinates from the target step's position the first time the process is opened and saved there — no human edit required. Do not rely on any dragpoint coordinate as a layout mechanism. Connector lines are routed orthogonally — horizontal and vertical segments only, never diagonal — and each outcome's label is drawn at the **target** end of its line, immediately before the target step. A step's own `x`/`y` is the only geometry worth authoring carefully.
+
+### Converging Outcomes
+**Never wire two outcomes of one step to the same target step.** Both labels anchor at the same point and overprint into an unreadable smear; with unlabeled outcomes the two lines coincide exactly and a reader cannot tell the step has more than one. Execution is unaffected and the wiring is correct — nothing in the XML, logs, or execution record flags it — so this is caught only by looking at the Build canvas.
+
+Applies to any step exposing multiple outcomes, including Process Call return paths and Branch. No arrangement of steps fixes it: both outcomes leave one step and arrive at one step, so both lines follow the same route wherever those two steps sit, and deliberately-differing dragpoint coordinates collapse onto a single value the first time the process is opened and saved in the GUI.
+
+The only remedy is giving each outcome its own target step:
+- **Interpose one inert Notify per outcome** before the shared step (preferred). The shared step is retained, so the process's return contract is unchanged, and documents pass through unaltered, at a small fixed log cost (see `steps/notify_step.md`). Two lines converging on the shared step from *different* steps render cleanly — the defect is specific to two lines leaving *one* step for one target.
+- **Or give each outcome its own terminal step**, when the outcomes should be independently addressable. See `steps/return_documents_step.md` for the return-contract consequence.
+
+A converged step is entered **once per inbound outcome**, not once with the merged set — two outcomes arriving means two separate executions of that step, each with its own documents. Relevant when the shared step is order- or batch-sensitive (e.g. a `combined="true"` Message step).
 
 ### Terminal Steps (Return Documents vs Stop)
 **Return Documents:** Returns documents to calling context (parent process or external caller). In subprocess, creates return branches in parent. In listener, returns API response. Documents retain all properties when returned.
@@ -326,6 +342,7 @@ Key patterns that fail silently without errors:
 - **UDF wiring keys**: Inside a User-Defined Function, a Mapping pointing at a nonexistent port key is accepted on push and executes without error — the wire is silently dropped and the downstream input reads empty (wrong output, no failure). NamePaths are decorative; only keys are checked, and only by you
 - **UDF interface drift**: Changing a User-Defined Function's interface keys breaks consuming maps at execution with a misleading error blaming the *source profile* — see `components/user_defined_function_component.md`
 - **Document cache key `taglistKey="-1"`**: accepted on push, but Add to Cache silently indexes nothing — the cache stays empty. Use `0` outside taglists
+- **Split output shape**: Split Documents keeps the parent wrapper (JSON and XML) — a Set Properties or Route key written for a bare element reads empty, no error
 - **Process Route reference prefix**: A `processRouteId` missing the `resource::rout:` prefix is accepted on push and deploy, failing only at execution
 - **XML schema mistakes**: Common validation errors
 

@@ -81,7 +81,7 @@ The `<Archiving>`, `<Tracking>`, `<Caching>` shells are always present.
 | `subject` | Overridden by `connector.mail.subject`. |
 | `disposition` | `inline` or `attachment`. |
 | `dataContentType` | Format of the attachment (`attachment`) or of the body (`inline`). |
-| `bodyContentType` | Format of the body supplied via `connector.mail.body`. Emit on every Send, including `inline`. |
+| `bodyContentType` | Format of the body supplied via `connector.mail.body` — applies only under `disposition="attachment"`. Under `inline` it is inert (`dataContentType` governs the body) and optional. |
 
 ### Get
 
@@ -101,9 +101,11 @@ The sender attribute is `from` on Send but `fromAddress` on Get.
 
 ### Content type values
 
-`dataContentType`: `text/plain`, `text/HTML`, `text/XML`, `application/binary`, `application/EDIFACT`, `application/EDI-X12`, `application/XML`.
+Author these exactly as shown — the tokens are case-sensitive. A mis-cased value (e.g. `text/HTML`) is not rejected; it is silently sent as `text/plain`. These lowercase forms are what the GUI dropdowns store.
 
-`bodyContentType`: `text/plain`, `text/HTML`, `text/XML`.
+`dataContentType`: `text/plain`, `text/html`, `text/xml`, `application/binary`, `application/edifact`, `application/edi-x12`, `application/xml`.
+
+`bodyContentType`: `text/plain`, `text/html`, `text/xml`.
 
 ## Step Structure
 

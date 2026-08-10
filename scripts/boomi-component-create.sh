@@ -1,8 +1,39 @@
 #!/usr/bin/env bash
 # Create a new component on the Boomi platform from a local XML file
-# Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--test-connection]
+# Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--allow-password-token] [--test-connection]
 
 source "$(dirname "$0")/boomi-common.sh"
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID] [--allow-password-token]
+  bash scripts/boomi-component-create.sh --test-connection
+
+Creates a new component on the Boomi platform from a local component XML file.
+Exits without writing if the XML already carries a component ID.
+
+Arguments:
+  <file_path>            Path to the component XML file to create.
+
+Options:
+  --branch <name|id>     Target branch (name or id). Defaults to the XML's
+                         branchId, then BOOMI_DEFAULT_BRANCH_ID, then main.
+  --allow-password-token Create a REST Client connection whose password field
+                         looks like a pulled secret token (128 lowercase hex).
+  --test-connection      Verify platform credentials and exit.
+  -h, --help             Show this help and exit.
+
+Side effects: creates a component on the platform; writes the returned
+component ID back into the local XML; updates local sync state.
+EOF
+}
+
+# Answer --help before load_env, which needs a workspace .env.
+for arg in "$@"; do
+  case "$arg" in -h|--help) usage; exit 0 ;; esac
+done
+
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
 require_tools curl jq
@@ -11,12 +42,15 @@ require_tools curl jq
 FILE_PATH=""
 TEST_CONN=false
 BRANCH=""
+ALLOW_PASSWORD_TOKEN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-connection) TEST_CONN=true; shift ;;
     --branch)          BRANCH="$2"; shift 2 ;;
-    -*)                echo "Unknown option: $1" >&2; exit 1 ;;
+    --allow-password-token) ALLOW_PASSWORD_TOKEN=true; shift ;;
+    -h|--help)         usage; exit 0 ;;
+    -*)                echo "Unknown option: $1" >&2; usage; exit 1 ;;
     *)                 FILE_PATH="$1"; shift ;;
   esac
 done
@@ -27,7 +61,8 @@ if $TEST_CONN; then
 fi
 
 if [[ -z "$FILE_PATH" ]]; then
-  echo "Usage: bash scripts/boomi-component-create.sh <file_path> [--branch NAME_OR_ID]" >&2
+  echo "ERROR: missing <file_path>." >&2
+  usage
   exit 1
 fi
 
@@ -35,6 +70,8 @@ if [[ ! -f "$FILE_PATH" ]]; then
   echo "ERROR: File not found: ${FILE_PATH}" >&2
   exit 1
 fi
+
+assert_no_password_token "$FILE_PATH" "$ALLOW_PASSWORD_TOKEN"
 
 COMPONENT_NAME="$(basename "$FILE_PATH" .xml)"
 

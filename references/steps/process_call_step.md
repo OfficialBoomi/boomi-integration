@@ -61,6 +61,34 @@ The subprocess MUST use a **data passthrough** start configuration to receive do
 </shape>
 ```
 
+### Multiple Return Paths
+Each return path needs its **own target step** — two paths on one target render unreadably on the canvas. See `BOOMI_THINKING.md` § Converging Outcomes for the mechanism and the alternative remedy.
+
+When the parent has one logical next step for all outcomes, keep the single shared step and put **one inert Notify per return path** in front of it:
+
+```xml
+<shape image="processcall_icon" name="shape3" shapetype="processcall" x="432.0" y="48.0">
+  <configuration>
+    <processcall abort="true" processId="[subprocess GUID]" wait="true">
+      <parameters/>
+      <returnpaths>
+        <returnpaths childShapeName="shape7"/>
+        <returnpaths childShapeName="shape8"/>
+      </returnpaths>
+    </processcall>
+  </configuration>
+  <dragpoints>
+    <dragpoint identifier="shape7" name="shape3.dragpoint1" toShape="shape4" x="608.0" y="56.0"/>
+    <dragpoint identifier="shape8" name="shape3.dragpoint2" toShape="shape5" x="608.0" y="296.0"/>
+  </dragpoints>
+</shape>
+<!-- shape4 / shape5: one Notify per outcome, both wired to the shared shape6 -->
+```
+
+Documents pass through the Notify steps unchanged, at a small fixed log cost — give each a useful message (see `notify_step.md`).
+
+The `text` attribute on a return dragpoint is display-only and optional; the GUI back-fills it from the subprocess return step's label the first time the process is opened and saved there. The same save regenerates every return dragpoint's `x`/`y` from its target step's position, so authored coordinates do not survive.
+
 ## Configuration Elements
 
 ### processcall

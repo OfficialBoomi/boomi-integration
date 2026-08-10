@@ -23,7 +23,8 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-component-pull.sh**: Download components from platform to local
 - **boomi-component-diff.sh**: Compare two versions of a component (structured JSON diff)
 - **boomi-version-history.sh**: List component version history
-- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat (no subfolder recursion); `--folder` accepts id, exact name, or LIKE pattern with `%` wildcards (multiple matches unioned). `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false`.
+- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false`.
+- **boomi-folder-list.sh**: List a folder's child folders (or its whole subtree with `--recursive`) as `id<TAB>fullPath`, also written to `active-development/inventories/folder_list_<timestamp>.json`.
 
 **Deployment & Testing**:
 - **boomi-deploy.sh**: Deploy processes to runtime environments
@@ -91,11 +92,17 @@ bash <skill-path>/scripts/boomi-execution-query.sh --execution-id <execution-id>
 
 **Component Search** (discovery primitive — results land in `active-development/inventories/<timestamp>.json` for later reference):
 ```bash
-# Everything in a specific folder (flat — no subfolder recursion).
-# --folder accepts an id, an exact name, or a LIKE pattern with % wildcards;
-# multiple matches are unioned.
+# Components directly in a folder (flat by default). --folder takes an id, exact
+# name, % pattern, or path; multiple matches are unioned.
 bash <skill-path>/scripts/boomi-component-search.sh --folder "AcmeCorp-EmailNotification"
-bash <skill-path>/scripts/boomi-component-search.sh --folder "AcmeCorp-%"
+
+# The folder AND its subfolders. An organizational parent returns 0 components when
+# searched flat, and a % pattern on its name will not reach its children.
+bash <skill-path>/scripts/boomi-component-search.sh --folder "%Invoicing%" --recursive
+
+# A path disambiguates same-named folders; a '/'-anchored trailing portion is
+# enough, and % works in any segment.
+bash <skill-path>/scripts/boomi-component-search.sh --folder "Billing/Invoic%" --type process
 
 # All connections in an account — the API-level type is connector-settings.
 # To narrow to a specific connector, filter the saved JSON by subType
@@ -113,6 +120,24 @@ bash <skill-path>/scripts/boomi-component-search.sh --type connector-settings,co
 # IMPORTANT: --related-to cannot be combined with other filters.
 bash <skill-path>/scripts/boomi-component-search.sh --related-to <componentId>
 ```
+
+**Folder Discovery** (structure under a parent folder):
+```bash
+# Account's top-level folders
+bash <skill-path>/scripts/boomi-folder-list.sh
+
+# A folder's direct children; add --recursive for the whole subtree
+bash <skill-path>/scripts/boomi-folder-list.sh --folder "%Invoicing%"
+```
+
+Deleted folders are excluded from every folder query. A `--recursive` scope is capped at
+`FOLDER_SCOPE_MAX` folders (default 1000); past it both tools print `TRUNCATED` and set
+`metadata.truncated`.
+
+`boomi-folder-list.sh` omits the named folder from its output; `boomi-component-search.sh
+--recursive` includes it in scope. Component records carry `folderId` and `folderName` but no path,
+so when same-named folders are in scope, attribute records via `metadata.filters.folderScope`
+(id + `fullPath`), not `folderName`.
 
 **`--type` takes the API-level component type, not the Boomi UI label.** A Boomi "connection" is `connector-settings` (with a `subType` naming the connector); an "operation" is `connector-action`. Other common types: `process`, `transform.map`, `profile.xml`, `profile.json`, `profile.db`, `profile.edi`, `profile.flatfile`, `script.processing`, `webservice`, `flowservice`, `queue`.
 
@@ -158,6 +183,10 @@ bash <skill-path>/scripts/boomi-component-diff.sh --component-id <guid> --source
 ```
 
 See `references/guides/version_management_guide.md` for full version management reference.
+
+**Push short-circuit:** `boomi-component-push.sh` compares the local file's hash against the hash recorded in local sync state, not against the platform. If the component changed in the GUI but the local file did not, the push reports `matches the last push — nothing sent to the platform` and sends nothing, so GUI-side drift is invisible to it. Use `--force` to overwrite platform state from the local file.
+
+**Diff blind spot:** `boomi-component-diff.sh` does not report dragpoint `x`/`y` changes — the platform's diff omits cosmetic coordinates. A GUI save that regenerates dragpoint coordinates shows up as a diff of only the label attributes it also changed. To detect that kind of drift, pull both versions and compare the XML directly.
 
 **Large Profile Analysis**:
 ```bash
@@ -280,12 +309,14 @@ Opt-in JSONL log of script-level operations (component pulls, pushes, deployment
 
 **User-provided credentials**: If the user provides a credential value directly (e.g., "here's the API key, build this"), use it in component XML. If it appears to be a production secret, remind them of the pull-from-platform option — but respect their choice.
 
-**Pulled components — encryption behavior**:
+**Pulled components — encryption behavior** (REST Client connections are an exception — see below):
 - If any field has `encrypted="true"` or `type="password"` with encrypted value, preserve the value exactly as-is
 - Encrypted hex values may change across pull cycles due to platform-side re-encryption — this is expected, not corruption
 - Some connectors (e.g., MCP Server) use `encrypted="true"` on `<properties>` elements within `customproperties` fields instead of `type="password"` — see the relevant connection component reference
 - Do not attempt to encrypt or re-encrypt values programmatically — this will produce broken credentials
 - Do not copy an encrypted value from one component into a different component — a transplanted ciphertext can push cleanly but fail to decrypt when the process executes (surfacing as an auth failure with no other symptom). To credential a new component, have the user set the value in the GUI on that component, then pull it
+
+**REST Client connections — password fields are write-only**: a pulled `type="password"` value is a platform token, not the password, and writing it back silently breaks the credential — never re-push a pulled REST Client connection. `boomi-component-create.sh` and `boomi-component-push.sh` refuse a pushed token (`--allow-password-token` overrides). Read `references/components/rest_connection_component.md` § Password Encryption before writing one.
 
 **Process property passwords**: Prefer leaving `defaultValue` empty for `type="password"` fields and supplying real values via Environment Extensions. If a pulled component has a non-empty password `defaultValue`, let the user know — they may want to migrate to Environment Extensions.
 

@@ -4,6 +4,8 @@
 - Overview
 - Component Structure
 - Authentication Patterns
+  - Password Encryption
+  - Keeping the Password Out of the Component (Environment Extensions)
   - Preemptive Authentication
 - Required Fields
 - URL Configuration Notes
@@ -26,9 +28,7 @@ REST Connection components define the base URL and authentication settings for R
                type="connector-settings"
                subType="officialboomi-X3979C-rest-prod"
                folderId="{folder-id}">
-  <bns:encryptedValues>
-    <!-- Password encryption entries if using basic auth -->
-  </bns:encryptedValues>
+  <bns:encryptedValues/>  <!-- platform-generated; emit empty -->
   <bns:object>
     <GenericConnectionConfig>
       <!-- Configuration fields -->
@@ -67,7 +67,7 @@ Standard username/password authentication:
   <field id="url" type="string" value="https://api.example.com/v2"/>
   <field id="auth" type="string" value="BASIC"/>
   <field id="username" type="string" value="{username}"/>
-  <field id="password" type="password" value="{encrypted-password}"/>
+  <field id="password" type="password" value=""/>  <!-- user sets in GUI -->
   <field id="preemptive" type="boolean" value="false"/>
   <field id="connectTimeout" type="integer" value="-1"/>
   <field id="readTimeout" type="integer" value="-1"/>
@@ -76,14 +76,40 @@ Standard username/password authentication:
 </GenericConnectionConfig>
 ```
 
-**Password Encryption:**
+### Password Encryption
 
-**Pulled/Existing Connections**: Preserve `<bns:encryptedValues>` and password field values exactly as-is. Never modify encrypted values.
+Password fields are **write-only**. A pull returns a 128-character lowercase-hex token — a reference to the stored secret, not the password — and every push stores the field's `value` verbatim as the new secret.
 
-**New Connection Creation**: Boomi auto-encrypts `type="password"` fields when pushed via API. Pass plaintext value, leave encryption metadata empty:
+**Have the user set REST Client passwords in the Boomi GUI.** Author the field as `value=""` and have them fill it in afterward. Only a plaintext value stores correctly; **every other form destroys the credential**, pushing and deploying cleanly and then failing at request time with HTTP 401 — no design-time error:
+
+| Pushed `value` | Stored result | Visible in a later pull? |
+|---|---|---|
+| the pulled 128-hex token | the token string becomes the password | **No** — entry stays `isSet="true"`, looks healthy |
+| `""` (empty) over a set secret | cleared | Yes — `<bns:encryptedValues/>` comes back empty |
+| field omitted | field deleted | Yes — field absent from the pulled XML |
+
+**So: never pull a connection, edit an unrelated field, and push it back.** Have the user make the edit in the GUI, or move the secret to Environment Extensions (below) so the XML becomes safe to push. Do not ask the user for the plaintext to get past this; `boomi-component-push.sh` and `boomi-component-create.sh` refuse a pushed token outright.
+
+`<bns:encryptedValues>` is platform-generated output, not input — emit it empty. Its `path` is `field[@type='password']`, so one entry covers *every* password-typed field (`password`, `customAuthCredentials`, `awsSecretKey`): `isSet="true"` means "at least one is set", not which.
+
+**Recovering a broken connection**: have the user re-enter the password in the GUI, re-inserting the field as `value=""` first if it was deleted. Re-pulling and re-pushing only stores a fresh token. A successful push says nothing about credential validity — only executing against the target system confirms it.
+
+### Keeping the Password Out of the Component (Environment Extensions)
+
+Preferred when a connection needs ongoing API edits: the component keeps an empty password field, an extension supplies the credential, and the XML becomes safe to pull, edit, and push freely. Declare the override on each process using the connection:
 ```xml
-<bns:encryptedValues/>
+<field id="password" label="Password" overrideable="true"
+       xpath="GenericConnectionConfig/field[@id='password']/@value"/>
 ```
+An extension value outranks the component's own. See `references/components/process_extensions.md` for the full override structure, the inert-`xpath` hazard, and CLI usage.
+
+**Converting a connection that already has a working password — order matters,** since the `value=""` push that makes the XML pushable also clears the stored secret:
+
+1. Add the override declaration to every process using the connection; push and **redeploy**.
+2. Have the user set the extension value in each environment.
+3. Only then push the connection with `password` set to `value=""`.
+
+Tell the user the connection now authenticates only where the extension is set, so deploying it elsewhere means setting the extension there too.
 
 ### Preemptive Authentication
 
@@ -126,7 +152,7 @@ The `preemptive` field controls when credentials are sent to the server:
 ### Additional for Basic Auth
 ```xml
 <field id="username" type="string" value="{username}"/>
-<field id="password" type="password" value="{encrypted-password}"/>
+<field id="password" type="password" value=""/>  <!-- user sets in GUI -->
 <field id="preemptive" type="boolean" value="false"/>
 ```
 
@@ -238,7 +264,7 @@ Authorization: Bearer {token-value}
 ```xml
 <field id="auth" type="string" value="BASIC"/>
 <field id="username" type="string" value="api_user"/>
-<field id="password" type="password" value="{encrypted}"/>
+<field id="password" type="password" value=""/>  <!-- user sets in GUI -->
 ```
 
 ## Implementation Strategy
@@ -250,7 +276,7 @@ Authorization: Bearer {token-value}
    - Username/password are the primary credentials
    - Same credentials apply to all operations
 
-3. **Password Handling**: **Pulled Components**: Preserve encrypted values exactly as-is when re-pushing. **New Connections**: Pass plaintext for `type="password"` fields - Boomi auto-encrypts on push.
+3. **Password Handling**: Author the password field empty and have the user set it in the Boomi GUI; never re-push a pulled connection. See **Password Encryption** above before writing one.
 
 4. **Component Naming**: Use descriptive names like:
    - `Salesforce REST Connection`

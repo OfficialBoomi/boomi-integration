@@ -137,6 +137,7 @@ With `includeAll=false`:
 
 - Dates use format `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'` (ISO 8601 with milliseconds, UTC).
 - `fileSize` is in bytes.
+- `directory` echoes the configured value (connection field or document-property override) verbatim — it is not resolved to an absolute path, so it cannot be used to discover where on the runtime the file actually landed. LIST responses echo the same way.
 
 ### fileName with Subdirectory Paths
 
@@ -149,10 +150,12 @@ The `connector.disk-sdk.fileName` document property supports forward-slash path 
 
 Nested directories are auto-created when `createDir=true`.
 
-**Path traversal**: On cloud runtimes, `../` in fileName is blocked by the Java SecurityManager:
+**Path traversal**: On cloud runtimes, a `..` segment in fileName is blocked as a *form*, not only when it escapes the writable tree — the permission check matches the literal, un-normalized path string:
 ```
 [-1] access denied ("java.io.FilePermission" "work/../temp" "write")
+[-1] access denied ("java.io.FilePermission" "work/sub/.." "write")
 ```
+The second is `directory=work` with fileName `sub/../report.txt`, which resolves to the writable `work/report.txt` and is still denied.
 
 ## UPSERT Operation
 

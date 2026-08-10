@@ -1,22 +1,13 @@
 #!/usr/bin/env bash
 # Push a local component XML file to the Boomi platform (update)
-# Usage: bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force] [--test-connection]
+# Usage: bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force] [--allow-password-token] [--test-connection]
 
 source "$(dirname "$0")/boomi-common.sh"
-load_env
-require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
-require_tools curl jq
-
-# --- Parse args ---
-FILE_PATH=""
-TEST_CONN=false
-BRANCH=""
-FORCE=false
 
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force]
+  bash scripts/boomi-component-push.sh <file_path> [--branch NAME_OR_ID] [--force] [--allow-password-token]
   bash scripts/boomi-component-push.sh --test-connection
 
 Pushes a local component XML file to the Boomi platform as an update.
@@ -29,6 +20,8 @@ Options:
                          branchId, then BOOMI_DEFAULT_BRANCH_ID, then main.
   --force                Push even when the content matches the last push
                          (skips the content-hash short-circuit).
+  --allow-password-token Push a REST Client connection whose password field
+                         looks like a pulled secret token (128 lowercase hex).
   --test-connection      Verify platform credentials and exit.
   -h, --help             Show this help and exit.
 
@@ -36,11 +29,28 @@ Side effects: creates a new component version on the platform; updates local syn
 EOF
 }
 
+# Answer --help before load_env, which needs a workspace .env.
+for arg in "$@"; do
+  case "$arg" in -h|--help) usage; exit 0 ;; esac
+done
+
+load_env
+require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
+require_tools curl jq
+
+# --- Parse args ---
+FILE_PATH=""
+TEST_CONN=false
+BRANCH=""
+FORCE=false
+ALLOW_PASSWORD_TOKEN=false
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-connection) TEST_CONN=true; shift ;;
     --branch)          BRANCH="$2"; shift 2 ;;
     --force)           FORCE=true; shift ;;
+    --allow-password-token) ALLOW_PASSWORD_TOKEN=true; shift ;;
     -h|--help)         usage; exit 0 ;;
     -*)                echo "Unknown option: $1" >&2; usage; exit 1 ;;
     *)                 FILE_PATH="$1"; shift ;;
@@ -62,6 +72,8 @@ if [[ ! -f "$FILE_PATH" ]]; then
   echo "ERROR: File not found: ${FILE_PATH}" >&2
   exit 1
 fi
+
+assert_no_password_token "$FILE_PATH" "$ALLOW_PASSWORD_TOKEN"
 
 COMPONENT_NAME="$(basename "$FILE_PATH" .xml)"
 

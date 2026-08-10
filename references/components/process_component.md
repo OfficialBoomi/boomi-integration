@@ -74,8 +74,10 @@ When `true`, the process's log files are written to the runtime's local executio
 - `true`: Retains a local copy of process logs on the runtime — useful for runtime-side troubleshooting. Recommended for MCP Server processes.
 - `false`: Default. No local execution-history log capture.
 
+Not to be confused with the same-named `enableUserLog` on `<notify>` (the Notify dialog's "Write to Local Runtime User Log"). The two are independent settings that share a name; neither affects the other.
+
 #### `processLogOnErrorOnly` (Only Generate Process Log on Error)
-When `true`, the process log is generated only for executions that encounter an error. Off by default. Only enable in Low Latency mode when error visibility must still be captured.
+Intended to generate the process log only for executions that encounter an error. Off by default. **At `workload="general"` it has no effect** — a successful execution still produces a complete process log, so do not use it to reduce log volume for a general-mode process.
 
 #### `purgeDataImmediately`
 Purges processed documents and temporary data immediately after each execution. Does not purge process or document logs.
@@ -146,6 +148,7 @@ Shapes connect through `<dragpoint>` elements within their `<dragpoints>` contai
 - Each dragpoint specifies a `toShape` attribute with the target shape's name
 - Connectedness is resolved by name only — `toShape` (plus `identifier` matching for Process Call return paths, see `references/steps/process_call_step.md` § Return Path Mapping). The dragpoint's own `x` and `y` are purely cosmetic and do not affect whether shapes are connected
 - Coordinate convention for clean rendering: dragpoint `x` = target shape's `x` - 16, `y` = target shape's `y` + 8
+- On save the GUI recomputes return-path dragpoint coordinates from the target step's current position using that formula, whether or not any step moved. Do not rely on any dragpoint coordinate as a layout mechanism — express layout intent through the **step's own** `x`/`y`, which is preserved
 - Sequential shapes typically have one dragpoint leading to the next shape
 
 ### Branch Shapes

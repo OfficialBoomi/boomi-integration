@@ -3,13 +3,15 @@
 ## Contents
 - Purpose
 - Key Concepts
-- GUI-Only Components
+- One-Time GUI Setup
 - Configuration Structure
 - Required Components
 - Component Dependencies
 - Process Pattern
-- Raw Output Format (SSE Event Stream)
+- Output Format
+- Error Handling
 - Response Modes
+- File Uploads
 - Limitations
 - Reference XML Examples
 
@@ -22,24 +24,26 @@ Agent steps integrate AI agents from the Boomi Agent Control Tower into integrat
 - Processing agent responses for downstream system consumption
 
 ## Key Concepts
+- **Platform surfaces**: Agentstudio is the umbrella over **Agent Designer** (author the agent), **Agent Garden** (deploy it; also the service the connection's URL and the step's requests go to), and **Agent Control Tower** (register and monitor).
 - **Connector action pattern**: Agent steps use `shapetype="connectoraction"` with `connectorType="boomiai"` — the same dual-component pattern as REST, Database, etc.
 - **GUI icon distinction**: The `image="aiagent_icon"` attribute is what renders the agent-specific icon in the GUI. The underlying shape type is a standard connector action.
 - **Prompt = input document**: The agent receives whatever document content arrives at the step. Any upstream shape that produces a document works — a Message step is common but not required.
 - **Single input/output**: One document in, one document out. No batching, no multi-turn within a single execution.
-- **Connection/operation are one-time GUI setup**: The Agent connection and operation components cannot be created via the Component API — they require one-time configuration through the platform GUI. Once created, they are reusable by ID across any number of programmatically-built processes.
+- **Connection/operation are GUI-only and read-only**: Neither can be created nor updated via the Component API. Once they exist, reference them by ID from any number of programmatically-built processes. Everything else — process, profiles, and the Agent step shape — is programmatic.
+- **The operation pins a deployment, not an agent**: `objectTypeId` is the agent's **deployment ID**, which survives re-packaging, so the step runs the latest deployed version with no re-sync and no process redeploy.
 
-## One-Time GUI Setup (Reusable Components)
+## One-Time GUI Setup
 The Agent step depends on two components created once via GUI, then reused by ID:
 
-1. **Connection** — Auto-generated when you first configure an Agent step. Contains the Platform API token and account binding. Stored in a root-level `Agents` folder.
-2. **Operation** — Generated per agent configuration. Contains the agent selection and response mode. Stored in an `Agents` subfolder within the process's folder.
+1. **Connection** — `connector-settings`, `subType="boomiai"`. Holds one `url` field for the account's Agent Garden session endpoint; no credentials. Root-level `Agents` folder. One connection serves every agent in the account — always reuse it.
+2. **Operation** — `connector-action`, `subType="boomiai"`. One per agent. Holds `objectTypeId` (the deployment ID), the Platform API token as encrypted `auth_platformApiKey`, `auth_username`, the `returnApplicationErrors` and `trackResponse` attributes, optional `connectTimeout`/`readTimeout` (unset by default), and for structured agents references to the generated request/response profiles. `Agents` subfolder within the process's folder.
 
-Once created, the `connectionId` and `operationId` are reusable indefinitely — reference them in any process XML built by this skill.
+**The generated profiles are not GUI-gated.** They are ordinary `profile.json` components — pull and push them like any other. **Sync with Agentstudio** does **not** regenerate them after an agent schema edit: it bumps the version with a zero-change diff. Push a corrected profile instead; only **Generate Configuration** rebuilds them GUI-side. Realignment is cosmetic — profiles are informational and do not reshape the document at request time.
 
 **Workflow when building a process with an agent step:**
-1. Ask the user if they have existing agent connection/operation IDs
-2. If yes — proceed, build the process referencing those IDs
-3. If no — guide them through the one-time GUI setup: create an agent in Agent Designer, configure an agent step in any process via GUI, then pull that process to capture the generated connection and operation GUIDs
+1. Search for an existing operation for the target agent before asking the user for anything.
+2. If one exists — build the whole process programmatically, Agent step included. No GUI.
+3. If not — the user must mint one in the GUI, the only route to **Generate Configuration**. Have them configure an Agent step in a **throwaway scratch process**, then pull it for the `connectionId` and `operationId` and build the real process yourself. Never ask the user to place an Agent step in a process you are authoring.
 
 ## Configuration Structure
 ```xml
@@ -61,17 +65,19 @@ Once created, the `connectionId` and `operationId` are reusable indefinitely —
 
 ## Required Components
 Before adding an Agent step, ensure:
-1. **Agent exists in Agent Control Tower** — Created via Agent Designer, synced to the account
-2. **Agent step configured once via GUI** — This generates the connection and operation components
+1. **Agent exists in Agent Control Tower** — Created via Agent Designer, deployed, and synced to the account
+2. **An operation exists for that agent** — Generated by configuring an Agent step once via GUI
 3. **Connection and Operation IDs captured** — Pull the process XML to obtain the GUIDs for programmatic reuse
 
 ## Component Dependencies
 ```
 Agent Step (in process)
   ├── references → Agent Connection (by connectionId)
-  │                  └── contains → Platform API Token, account binding
+  │                  └── contains → Agent Garden session endpoint URL (account-wide, reusable)
   └── references → Agent Operation (by operationId)
-                     └── contains → Agent selection, response mode config
+                     └── contains → objectTypeId (the agent's deployment ID),
+                                    Platform API token, response mode,
+                                    generated JSON profiles (structured agents only)
 ```
 
 ## Process Pattern
@@ -83,10 +89,25 @@ Start → Message (build prompt) → Agent Step → [optional Data Process clean
 
 1. **Message step**: Constructs the prompt document. Can use parameter substitution to inject dynamic data.
 2. **Agent step**: Sends the document to the configured agent, returns the response.
-3. **Data Process step** (optional): Extracts the agent's text response from the SSE event stream output. See "Extracting the response text" below for the Groovy script.
+3. **Data Process step** (optional): Extracts the agent's response from the raw output. The shape of that output depends on the response mode — see "Output Format".
 
-## Raw Output Format (SSE Event Stream)
-The agent step output is a Server-Sent Events (SSE) stream, not plain text. The full stream includes metadata about the agent's reasoning process before the actual response.
+## Output Format
+The success shape depends on the response mode; the error shape is the same JSON object in both. Branch on `success` before parsing — see "Error Handling".
+
+| Mode | Success output | Error output |
+|------|----------------|--------------|
+| Conversational | SSE event stream | single JSON object |
+| Structured | single JSON object (`{success, agent_id, session_id, data}`) | single JSON object |
+
+### Structured agents — JSON envelope
+```json
+{"success":true,"agent_id":"...","session_id":"...","data":{"your_field":"..."}}
+```
+
+The agent's output-schema payload is nested under `data` — unwrap it downstream. The SSE extractor below does not apply and returns `""` against this shape.
+
+### Conversational agents — SSE event stream
+The output is a Server-Sent Events (SSE) stream, not plain text. The full stream includes metadata about the agent's reasoning process before the actual response.
 
 **Event types in order:**
 
@@ -139,17 +160,113 @@ for (int i = 0; i < dataContext.getDataCount(); i++) {
 }
 ```
 
+## Error Handling
+Failures split into two classes needing **both** mechanisms at once.
+
+| Failure class | Examples | How it arrives | Detection |
+|---------------|----------|----------------|-----------|
+| **Agent-side rejection** | uploads not enabled, file type/format rejected, too many or oversized files, input doesn't match the schema | HTTP 200 with `{"success":false,"error":"..."}` — the connector sees a successful call and emits the body as the output document | **Decision step on `success`** → Exception step |
+| **Transport fault** | read or connect timeout, unreachable host | the shape raises — `Shape executed with errors`, documents go down the error path | **Try/Catch step**; message in `meta.base.catcherrorsmessage` |
+
+**Try/Catch cannot catch an agent-side rejection** — there is no fault to catch, and the operation's `returnApplicationErrors` attribute does not change that.
+
+**A `success` check does not catch guardrail refusals.** Those return `success: true` with the refusal as the payload (`I'm sorry, I'm not able to help with that request...`) — add content inspection if refusals must be handled.
+
+Diagnosing a process that already exhibits this: `references/guides/boomi_error_reference.md` Issue #32.
+
+**Timeouts.** `connectTimeout`/`readTimeout` are operation fields in milliseconds, unset by default. `readTimeout` is not a wall-clock ceiling — the connector retries at the HTTP layer, so a 1000 ms value can surface at ~5× that. The caught message is exactly `Read timed out`, with no URL, agent ID, or status code.
+
 ## Response Modes
 Agents configured in Agent Designer have two response modes:
 
-- **Conversational** (default): Agent responds in natural language text. Suitable for human-readable outputs.
-- **Structured**: Agent responds in a consistent JSON format. Suitable for downstream system consumption. Generates request/response JSON profiles in the operation component.
+- **Conversational** (default): Agent responds in natural language text. The operation's profile types are `binary`/`binary`, no generated profiles.
+- **Structured**: Agent responds in a consistent JSON format, for downstream system consumption. Generates request/response JSON profiles on the operation.
 
-The response mode is configured in Agent Designer, not in the process step.
+The response mode is configured in Agent Designer, not in the process step. It affects only the response shape — **both modes accept file uploads**, driven by the same JSON document from the process.
+
+## File Uploads
+Documents and images can be sent to an agent in **either** response mode.
+
+**The only prerequisite is on the agent**, in Agent Designer: **Profile** > **File Upload** > **Allow files to be uploaded**, with the accepted formats selected. Off by default.
+
+**A `files` field in the input schema is not required.** Agent Garden consumes `files` from the top level of the request regardless of what a structured agent's input schema — or the profile generated from it — declares. The exception is root `"additionalProperties": false`, which rejects the undeclared property. Either leave `additionalProperties` unset, or set it and declare `files`.
+
+### Process Pattern
+```
+Start → [file retrieval] → Data Process (Base64 Encode + strip line breaks) → [build JSON payload] → Agent Step → Decision on success → downstream
+```
+
+1. **Retrieve the file**: Disk, FTP, MFT, or Mail connector step, or an HTTP/REST step.
+2. **Base64 encode and strip the line breaks**, both in one Data Process step. Base64 Encode wraps at 76 characters, and those newlines make the JSON invalid:
+
+   ```xml
+   <dataprocess>
+     <step index="1" key="1" name="Base64 Encode" processtype="6"/>
+     <step index="2" key="2" name="Search/Replace" processtype="1">
+       <dataprocessreplace replacewith="" searchType="document" texttofind="[\r\n]"/>
+     </step>
+   </dataprocess>
+   ```
+
+3. **Wrap the encoded bytes** in JSON — Message step (base64 as a Current Data variable) or Map. The Agent step forwards the document verbatim and wraps nothing, so a bare base64 blob is rejected. Filename and format are required alongside the bytes; for a structured agent the rest of the JSON must satisfy the input schema.
+4. **Agent step**: no file-specific attributes — identical XML to any other agent step.
+5. **Decision step on `success`** — rejections are not catchable by Try/Catch. See "Error Handling".
+
+### File Entry Structure
+Each entry in `files` contains exactly one of `document` or `image`:
+
+```json
+{
+  "query": "Extract the line items from this invoice.",
+  "files": [
+    {
+      "document": {
+        "name": "invoice.pdf",
+        "format": "pdf",
+        "source": { "bytes": "JVBERi0xLjQKJ..." }
+      }
+    },
+    {
+      "image": {
+        "name": "receipt.png",
+        "format": "png",
+        "source": { "bytes": "iVBORw0KGgoAAAANSU..." }
+      }
+    }
+  ]
+}
+```
+
+`query` is an example sibling field — everything other than `files` comes from the agent's input schema.
+
+| Wrapper | `name` | `format` values |
+|---------|--------|-----------------|
+| `document` | Required | `pdf`, `csv`, `txt`, `docx`, `xlsx` |
+| `image` | Optional | `png`, `jpg`, `jpeg` |
+
+`source.bytes` is required in both: base64 content, non-empty, max 2 MB decoded.
+
+### Limits and Behavior
+- Max **5 files per request**, **2 MB per file**, **10 MB total**
+- `format` must match actual file content — the MIME type is derived server-side and validated, so `pdf` over text bytes is rejected even when `pdf` is on the allow-list
+- **All-or-nothing**: one failing file rejects the entire upload
+- **Single turn**: send all files in the one request; nothing is retained between runs
+- Decoded file content consumes the agent's context window; the base64 wrapper does not
+- Agents cannot return files
+
+### Misleading Rejection Messages
+Rejections arrive as `{"success":false,"error":"..."}` in the output document, and most name their own cause. Two do not:
+
+| Error names | Actual cause |
+|-------------|--------------|
+| file corruption / failed validation | `format` doesn't match the actual bytes |
+| input not matching the agent's schema | line-wrapped base64, an unwrapped payload, or `additionalProperties: false` rejecting `files` |
 
 ## Limitations
-- Agent connections/operations cannot be created via Component API — GUI configuration required
+- Agent connections/operations are **read-only** to the Component API: create and update both return `subType boomiai is invalid. To complete the action, provide a valid subType.` (HTTP 400). Pull works, so they are readable and referenceable, but every edit — retargeting an agent, repairing a token, changing a timeout — is a GUI action.
+- Agent-side errors return in-band with the execution reporting `COMPLETE`; Try/Catch catches transport faults only. See "Error Handling".
 - Single input document, single output document — no batch processing
+- File uploads require file upload enabled on the agent; agents cannot return files
 - Context window: user prompt + agent goals + tasks + instructions combined cannot exceed 200K input tokens
 - Tool responses > 100K tokens are truncated by the platform
 - Agents must be synced from Control Tower before use (sync is not immediate)

@@ -154,6 +154,12 @@ For XML splitting:
 </documentsplit>
 ```
 
+### Output Document Shape
+
+A split is a filter, not an unwrap — each output document keeps the parent wrapper with the split element reduced to one occurrence. `{"orders":[A,B,C]}` yields `{"orders":[A]}`, `{"orders":[B]}`, `{"orders":[C]}`, never bare `A`/`B`/`C`. XML behaves the same.
+
+Downstream steps must therefore reuse the pre-split profile and its nested keys (`Root/Object/orders/orders/ArrayElement1/Object/id`, not `Root/Object/id`). A flattened single-element profile fails — see `references/guides/boomi_error_reference.md` Issue #34 for the per-step failure modes.
+
 ## Combine Documents (Process Type 9)
 
 Combine multiple documents into arrays or repeating elements.

@@ -47,6 +47,7 @@ Common dependency patterns:
 - **Maps**: `fromProfile`, `toProfile`, `docCache`, `id` on `FunctionStep category="userdefined"` (a User-Defined Function component)
 - **User-Defined Functions (transform.function)**: `componentId` on `<Scripting>` and `<DefinedProcessProperty>`, `connection` on `<SqlLookup>`, `crossRefTableId` on `<CrossRefLookup>`, `connectionId`/`operationId`/`parameter-profile`/`output-profile` on `<ConnectorCall>`, `docCache` on `<DocumentCacheLookup>` — recurse through the UDF one level deeper than for a plain map
 - **Processes**: `connectionId`, `operationId`, `mapId`, `calledProcess`
+- **Business Rules shapes** (inside a process): `profileId` on `<businessrules>`, plus — on a `<FunctionStep>` inside a rule input — `id` for `category="userdefined"` (a UDF component), `crossRefTableId` on `<CrossRefLookup>`, and the same function-step references listed for maps and UDFs above
 - **Operations**: `connectionId`, `requestProfileId`, `responseProfileId`
 
 **Step 4: Check existing local components**

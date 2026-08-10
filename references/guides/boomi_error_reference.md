@@ -8,6 +8,11 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 - API authentication failures with no error messages
 - Components landing in wrong folders despite configuration
 
+## Contents
+- Quick Diagnostic Guide — symptom to issue number
+- Quick Reference Index — every issue with frequency and detection mode
+- Numbered issue sections — full detail, in index order
+
 ---
 
 ## Quick Diagnostic Guide
@@ -48,6 +53,15 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Push rejected — "locked by another user" | #29 (Component Locking) |
 | Groovy compile error in ProcessLog after clean push/deploy | #30 (Groovy Runtime Compilation) |
 | Connection override ignored / prod uses wrong host despite useDefault=false | #31 (Inert Override Missing xpath) |
+| Agent step: execution COMPLETE but the agent did nothing | #32 (Agent Step In-Band Errors) |
+| Try/Catch never fires on a failing Agent step | #32 (Agent Step In-Band Errors) |
+| Agent response empty after SSE extraction | #32 (Agent Step In-Band Errors) |
+| `access denied ("java.io.FilePermission" ...)` on a Disk V2 operation | #33 (Disk V2 Directory Outside work/) |
+| `Cannot check for the existence of the file because it cannot be read or written to` | #33 (Disk V2 Directory Outside work/) |
+| Disk V2 write denied on a path outside `work` | #33 (Disk V2 Directory Outside work/) |
+| Profile-keyed extraction empty after a Split Documents step | #34 (Split Preserves Wrapper) |
+| Every document lands on a Route step's Default path after a split | #34 (Split Preserves Wrapper) |
+| "No data produced from map" after a split | #34 (Split Preserves Wrapper) |
 
 ---
 
@@ -86,6 +100,9 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 29 | Component Locking Blocks All API Updates | Medium | Push fails - HTTP 400 component locked |
 | 30 | Groovy Runtime Compilation | Medium | Runtime error - surfaced only in ProcessLog |
 | 31 | Connection-Override Field Missing xpath | High | Silent - override ignored, baked-in default used |
+| 32 | Agent Step Errors Return In-Band | High | Silent - COMPLETE on failure, Try/Catch never fires |
+| 33 | Disk V2 Directory Outside `work/` on Cloud Runtimes | High | Runtime error - FilePermission denial, clean push and deploy |
+| 34 | Split Documents Preserves Parent Wrapper | High | Silent in Set Properties/Route - ERROR in Map |
 
 ---
 
@@ -1797,5 +1814,151 @@ Any match is a declared-but-inert override (a correctly bound field ends with `x
 
 - `references/components/process_extensions.md` — Connection and Operation Overrides
 - Issue #23 documents the adjacent failure where an emptied `<bns:processOverrides>` hides extension declarations entirely
+
+---
+
+## Issue #32: Agent Step Errors Return In-Band, Not as Faults
+
+**Frequency:** High (any process using an Agent step)
+**Detection:** Silent — the shape reports success and the execution reports `COMPLETE`
+
+### The Problem
+
+Agent Garden answers an agent-side rejection with **HTTP 200** and a `{"success":false,"error":"..."}` body. The connector sees a successful call and emits that body as the output document. Nothing raises, so the shape reports success, the execution reports `COMPLETE`, and **a Try/Catch around the Agent step never fires** — there is no fault to catch.
+
+A process relying on Try/Catch for agent failures therefore has no error handling at all and reports success on total failure. The operation's `returnApplicationErrors` attribute does not change this; `true` and `false` behave identically.
+
+Agent-side rejections include: file uploads not enabled, file type or format rejected, too many or oversized files, and input not matching a structured agent's schema.
+
+### Wrong Pattern — Try/Catch as the Only Handler
+
+```
+Try/Catch
+  └── Agent Step → downstream
+      catch path: never taken — failures flow downstream as ordinary documents
+```
+
+### Correct Pattern — Decision on `success`, Try/Catch for Transport
+
+```
+Try/Catch
+  └── Agent Step → Decision (success == true?)
+                     ├── true  → downstream
+                     └── false → Exception step
+      catch path: transport faults only (read/connect timeout, unreachable host)
+```
+
+The Decision reads `success` from the returned envelope. Keep the Try/Catch — transport faults *do* fail the shape (`Shape executed with errors`, message in `meta.base.catcherrorsmessage`).
+
+### Related Traps
+
+- **Execution status is not a health signal.** Both failure classes finish `COMPLETE` — the rejection because nothing raised, a *caught* transport fault because the catch absorbed it.
+- **Guardrail blocks return `success: true`** with the refusal as the payload, so a `success` check passes them. Only content inspection catches those.
+- **A conversational agent's error output is JSON, not SSE**, so the `event: message` extractor returns `""` and discards the error. Branch on `success` before extracting.
+
+### Detection
+
+Rejections are refused before inference, so they return in a fraction of a real run's time. An Agent step that returns far faster than usual has usually been rejected.
+
+### Related
+
+- `references/steps/agent_step.md` § Error Handling — the two-class contract and timeout behavior
+- `references/steps/agent_step.md` § Output Format — the structured envelope the Decision reads `success` from
+
+---
+
+## Issue #33: Disk V2 Directory Outside `work/` Denied on Cloud Runtimes
+
+**Frequency:** High (any Disk V2 connection built without a stated runtime target)
+**Detection:** Runtime error — `java.io.FilePermission` denial on execution; push and deploy succeed
+
+### The Problem
+
+On cloud runtimes, Disk V2 writes are permitted under `work` and its subdirectories — any depth, auto-created with `createDir=true` — and denied outside it. `/tmp` is the common case.
+
+For an ordinary path, the constraint is **location, not path form**: a relative path outside `work` is denied exactly as an absolute one is. A `..` traversal segment is a separate rule — see § Traversal Is Blocked as a Form below.
+
+Every denied path still pushes and deploys cleanly — nothing surfaces at design time.
+
+The restriction covers the `connector.disk-sdk.directory` document property as well as the connection field, so a compliant connection does not guarantee a compliant write target.
+
+### Two Error Shapes
+
+Which message appears depends on whether the target directory already exists. Both contain `access denied ("java.io.FilePermission"`.
+
+**Target must be created** — directory creation denied, mode `write`, no exception class in the message:
+
+```
+[-1] access denied ("java.io.FilePermission" "{configured-directory}" "write")
+```
+
+**Target already exists** — existence check denied, mode `read`, wrapped in a connector message:
+
+```
+[-1] Cannot check for the existence of the file because it cannot be read or written to: java.security.AccessControlException: access denied ("java.io.FilePermission" "/tmp" "read")
+```
+
+The quoted path is echoed exactly as configured — not normalized, not resolved to an absolute path, no filename appended.
+
+### Traversal Is Blocked as a Form
+
+A `..` segment is denied even when it resolves back inside `work` — the permission check matches the literal, un-normalized path string. For the denial shapes, see `references/components/diskv2_connector_operation_component.md` § fileName with Subdirectory Paths.
+
+### Wrong Pattern — A Location Outside `work`
+
+```xml
+<field id="directory" type="string" value="/tmp"/>
+```
+
+### Correct Pattern
+
+```xml
+<field id="directory" type="string" value="work/output"/>
+```
+
+### The Rule
+
+Default every Disk V2 directory value to `work/{purpose}`.
+
+### Detection
+
+Config side — flag any directory value not under `work`, and inspect every override:
+
+```
+grep -n 'id="directory"' connection.xml | grep -v 'value="work[/"]'
+grep -n 'connector.disk-sdk.directory' process.xml
+```
+
+Anchor the `work` match on `/` or the closing quote — a bare `value="work` prefix also accepts non-compliant siblings such as `workflow/out`.
+
+Log side — key on the substring common to every shape. Do not pin the mode word (both `read` and `write` occur) and do not require the exception class (absent from the creation-denied shape):
+
+```
+grep -F 'access denied ("java.io.FilePermission"' process.log
+```
+
+### Related
+
+- `references/components/diskv2_connection_component.md` § Directory Configuration
+- `references/components/diskv2_connector_operation_component.md` § fileName with Subdirectory Paths — traversal denial, directory-override concatenation
+
+---
+
+## Issue #34: Split Documents Preserves the Parent Wrapper
+
+**Frequency:** High (any split followed by profile-keyed field access)
+**Detection:** Silent in Set Properties and Route (execution `COMPLETE`). Explicit ERROR in a Map.
+
+### The Problem
+
+A Split Documents step reduces the array or repeating element to one occurrence but keeps the parent wrapper: `{"orders":[A,B,C]}` yields `{"orders":[A]}`, `{"orders":[B]}`, `{"orders":[C]}`. XML behaves the same. Keyed against a flattened single-element profile:
+
+- **Set Properties** returns an empty string
+- **Route** matches nothing, so every document falls to the Default path
+- **Map** fails with `No data produced from map '<name>', please check source profile and make sure it matches source data`, emitting zero documents, so downstream steps are skipped
+
+### The Rule
+
+Downstream of a split, reuse the same profile and nested element keys as upstream of it. See `references/steps/data_process_step.md` § Output Document Shape.
 
 ---

@@ -2,10 +2,10 @@
 # Search Boomi components by folder, name, type, or reference relationship.
 # Results are written to active-development/inventories/component_search_<timestamp>.json.
 # Default filters include currentVersion=true and deleted=false.
-# Folder scoping is flat (no recursion into subfolders).
+# Folder scoping is flat unless --recursive is passed.
 #
 # Usage:
-#   bash scripts/boomi-component-search.sh --folder <id|name>
+#   bash scripts/boomi-component-search.sh --folder <id|name|path> [--recursive]
 #   bash scripts/boomi-component-search.sh --name '%Invoice%' [--type process]
 #   bash scripts/boomi-component-search.sh --type connector-settings,connector-action
 #   bash scripts/boomi-component-search.sh --related-to <componentId>
@@ -24,6 +24,7 @@ FOLDER=""
 NAME=""
 TYPES=""
 RELATED_TO=""
+RECURSIVE=false
 
 usage() {
   cat >&2 <<'EOF'
@@ -31,10 +32,15 @@ Usage:
   bash scripts/boomi-component-search.sh <filter> [<filter>...]
 
 Filters (at least one required):
-  --folder <id|name>      Components in the given folder (flat — no recursion).
-                          Accepts a folder id, an exact folder name, or a LIKE
-                          pattern (with % wildcards). Multiple matches are
-                          unioned via OR on folderId.
+  --folder <id|name|path> Components in the given folder (flat unless --recursive).
+                          Accepts an id, an exact name, a % LIKE pattern, or a
+                          path ('Parent/Child' — a '/'-anchored trailing portion
+                          is enough, and % works in any segment). A % pattern or
+                          path matching several folders unions them; an exact
+                          name matching several is refused as ambiguous.
+  --recursive             With --folder: also include every descendant folder.
+                          Use for parent folders whose components all live in
+                          subfolders.
   --name <pattern>        LIKE match on name (case-insensitive); use % wildcards (e.g. '%Invoice%')
   --type <csv>            Component types (OR). Use the API-level type, not the UI label:
                           process, connector-settings (connections), connector-action (operations),
@@ -47,12 +53,18 @@ Filters (at least one required):
                           (cannot combine with other filters)
 
 Output: active-development/inventories/component_search_<timestamp>.json
+
+Environment:
+  FOLDER_SCOPE_MAX   Max folders in a --recursive scope (default 1000). Past the
+                     cap the scope is truncated and metadata.truncated is true.
+  FOLDER_ID_BATCH    Folder ids per query (default 200).
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --folder)      FOLDER="$2"; shift 2 ;;
+    --recursive)   RECURSIVE=true; shift ;;
     --name)        NAME="$2"; shift 2 ;;
     --type)        TYPES="$2"; shift 2 ;;
     --related-to)  RELATED_TO="$2"; shift 2 ;;
@@ -68,8 +80,13 @@ if [[ -z "$FOLDER" && -z "$NAME" && -z "$TYPES" && -z "$RELATED_TO" ]]; then
   exit 1
 fi
 
-if [[ -n "$RELATED_TO" && ( -n "$FOLDER" || -n "$NAME" || -n "$TYPES" ) ]]; then
+if [[ -n "$RELATED_TO" && ( -n "$FOLDER" || -n "$NAME" || -n "$TYPES" || "$RECURSIVE" == true ) ]]; then
   echo "ERROR: --related-to cannot be combined with other filters." >&2
+  exit 1
+fi
+
+if [[ "$RECURSIVE" == true && -z "$FOLDER" ]]; then
+  echo "ERROR: --recursive requires --folder." >&2
   exit 1
 fi
 
@@ -81,7 +98,8 @@ out_file="active-development/inventories/component_search_${timestamp}.json"
 TMPFILES=()
 cleanup_tmpfiles() {
   local f
-  for f in "${TMPFILES[@]}"; do
+  # bash 3.2 reads an empty array as unset under set -u; hence the ${arr[@]+...} guard.
+  for f in ${TMPFILES[@]+"${TMPFILES[@]}"}; do
     [[ -n "$f" ]] && rm -f "$f"
   done
 }
@@ -92,109 +110,6 @@ mktempfile() {
   f=$(mktemp)
   TMPFILES+=("$f")
   echo "$f"
-}
-
-# --- Paginate helper ---
-# Accumulates `.result` arrays from an `/query` + `/queryMore` loop into the
-# caller-provided `pages_file` (one JSON array per line). Sets TOTAL_COUNT.
-# Caller consumes the file with `jq --slurpfile`, which avoids ARG_MAX on
-# large accumulations.
-paginate_query() {
-  local endpoint="$1"
-  local body="$2"
-  local pages_file="$3"
-
-  local url; url="$(build_api_url "${endpoint}/query" false)"
-  boomi_api -X POST "$url" \
-    -H "Accept: application/json" \
-    -H "Content-Type: application/json" \
-    -d "$body"
-
-  if [[ "$RESPONSE_CODE" != "200" ]]; then
-    echo "ERROR: ${endpoint}/query failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-    return 1
-  fi
-
-  echo "$RESPONSE_BODY" | jq -c '.result // []' > "$pages_file"
-  TOTAL_COUNT=$(echo "$RESPONSE_BODY" | jq -r '.numberOfResults // 0')
-  local token; token=$(echo "$RESPONSE_BODY" | jq -r '.queryToken // empty')
-
-  while [[ -n "$token" ]]; do
-    local more_url; more_url="$(build_api_url "${endpoint}/queryMore" false)"
-    boomi_api -X POST "$more_url" \
-      -H "Accept: application/json" \
-      -H "Content-Type: text/plain" \
-      -d "$token"
-
-    if [[ "$RESPONSE_CODE" != "200" ]]; then
-      echo "WARN: ${endpoint}/queryMore failed (HTTP ${RESPONSE_CODE}); returning partial results." >&2
-      break
-    fi
-    echo "$RESPONSE_BODY" | jq -c '.result // []' >> "$pages_file"
-    token=$(echo "$RESPONSE_BODY" | jq -r '.queryToken // empty')
-  done
-}
-
-# --- Resolve folder input → one or more folderIds ---
-# Resolution order:
-#   - Input contains '%' → LIKE-on-name only (ids never contain '%').
-#   - Otherwise → EQUALS-on-id, then fall back to EQUALS-on-name.
-# Emits one id per line on stdout (may be multiple for LIKE matches).
-# Errors on 0 matches.
-resolve_folder_ids() {
-  local input="$1"
-  local url; url="$(build_api_url "Folder/query" false)"
-
-  if [[ "$input" == *"%"* ]]; then
-    # Paginate via queryMore — Boomi's default page size is 100 and broad
-    # patterns (%test%, etc.) routinely exceed that.
-    local body pages
-    body=$(jq -cn --arg v "$input" '{QueryFilter:{expression:{operator:"LIKE",property:"name",argument:[$v]}}}')
-    pages=$(mktempfile)
-    if ! paginate_query "Folder" "$body" "$pages"; then
-      return 1
-    fi
-    if [[ "$TOTAL_COUNT" == "0" ]]; then
-      echo "ERROR: No folders matched pattern '${input}'." >&2
-      return 1
-    fi
-    jq -r '.[].id' "$pages"
-    return 0
-  fi
-
-  # Non-wildcard: try as id
-  boomi_api -X POST "$url" \
-    -H "Accept: application/json" -H "Content-Type: application/json" \
-    -d "$(jq -cn --arg v "$input" '{QueryFilter:{expression:{operator:"EQUALS",property:"id",argument:[$v]}}}')"
-
-  if [[ "$RESPONSE_CODE" == "200" ]]; then
-    local id; id=$(echo "$RESPONSE_BODY" | jq -r '.result[0].id // empty')
-    if [[ -n "$id" ]]; then
-      echo "$id"
-      return 0
-    fi
-  fi
-
-  # Fall back to exact name
-  boomi_api -X POST "$url" \
-    -H "Accept: application/json" -H "Content-Type: application/json" \
-    -d "$(jq -cn --arg v "$input" '{QueryFilter:{expression:{operator:"EQUALS",property:"name",argument:[$v]}}}')"
-
-  if [[ "$RESPONSE_CODE" != "200" ]]; then
-    echo "ERROR: Folder query failed (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
-    return 1
-  fi
-
-  local count; count=$(echo "$RESPONSE_BODY" | jq -r '.numberOfResults // 0')
-  if [[ "$count" == "0" ]]; then
-    echo "ERROR: Folder '${input}' not found (by id or exact name). Use % wildcards for LIKE matching." >&2
-    return 1
-  fi
-  if [[ "$count" -gt 1 ]]; then
-    echo "ERROR: Folder name '${input}' matches ${count} folders. Pass a folder id or use % wildcards to accept multiple matches." >&2
-    return 1
-  fi
-  echo "$RESPONSE_BODY" | jq -r '.result[0].id'
 }
 
 # --- Build ComponentMetadata/query expression ---
@@ -361,33 +276,85 @@ fi
 
 # --- Component-metadata path ---
 folder_ids_nl=""
+folder_scope_json="null"
+folder_count=0
+TRUNCATED=false
 if [[ -n "$FOLDER" ]]; then
-  if ! folder_ids_nl=$(resolve_folder_ids "$FOLDER"); then
+  if ! folder_records=$(resolve_folder_scope "$FOLDER"); then
     log_activity "component-search" "fail" "folder-resolve" \
-      "$(jq -cn --arg f "$FOLDER" \
-         '{mode:"component-metadata", folder:$f, stage:"resolve-folder", error:"folder resolution failed"}')"
+      "$(jq -cn --arg f "$FOLDER" --argjson r "$([[ "$RECURSIVE" == true ]] && echo true || echo false)" \
+         '{mode:"component-metadata", folder:$f, recursive:$r, stage:"resolve-folder", error:"folder resolution failed"}')"
     exit 1
   fi
+  root_count=$(printf '%s\n' "$folder_records" | grep -c . || true)
+
+  if [[ "$RECURSIVE" == true ]]; then
+    set +e
+    folder_records=$(folder_descendants "$folder_records"); rc=$?
+    set -e
+    case "$rc" in
+      0) ;;
+      2) TRUNCATED=true ;;
+      *) log_activity "component-search" "fail" "folder-descendants" \
+           "$(jq -cn --arg f "$FOLDER" \
+              '{mode:"component-metadata", folder:$f, recursive:true, stage:"folder-descendants", error:"subtree walk failed"}')"
+         exit 1 ;;
+    esac
+  fi
+
+  folder_ids_nl=$(printf '%s\n' "$folder_records" | awk -F'\t' 'NF>0 {print $1}')
   folder_count=$(printf '%s\n' "$folder_ids_nl" | grep -c . || true)
-  if [[ "$folder_count" -eq 1 ]]; then
-    echo "Resolved folder '${FOLDER}' → ${folder_ids_nl}"
+  folder_scope_json=$(printf '%s\n' "$folder_records" \
+    | jq -R -s -c 'split("\n") | map(select(length>0) | split("\t"))
+                   | map({id:.[0], name:.[1], fullPath:.[2]})')
+
+  if [[ "$RECURSIVE" == true ]]; then
+    echo "Resolved folder '${FOLDER}' → ${root_count} root(s), ${folder_count} folders in scope (recursive)$([[ "$TRUNCATED" == true ]] && echo " — TRUNCATED at the ${FOLDER_SCOPE_MAX}-folder cap")"
+  elif [[ "$folder_count" -eq 1 ]]; then
+    echo "Resolved folder '${FOLDER}' → $(printf '%s\n' "$folder_records" | awk -F'\t' 'NF>0 {print $1 " (" $3 ")"; exit}')"
   else
     echo "Resolved folder '${FOLDER}' → ${folder_count} folders (union)"
   fi
 fi
 
-expr=$(build_component_expr "$folder_ids_nl" "$NAME" "$TYPES")
-body=$(jq -cn --argjson e "$expr" '{QueryFilter:{expression:$e}}')
-
 pages=$(mktempfile)
 echo "Searching components..."
-if ! paginate_query "ComponentMetadata" "$body" "$pages"; then
-  log_activity "component-search" "fail" "$RESPONSE_CODE" \
-    "$(jq -cn --arg folder "$FOLDER" --arg name "$NAME" --arg types "$TYPES" \
-       --arg err "${RESPONSE_BODY:0:500}" \
-       '{mode:"component-metadata", folder:$folder, name:$name, types:$types, stage:"query", error:$err}')"
-  exit 1
+
+# Chunk folder ids so a wide subtree can't build an unbounded request body.
+# TOTAL_COUNT is per-query, so sum the reported totals across batches.
+total_reported=0
+run_batch() {
+  local ids_nl="$1"
+  local expr body
+  expr=$(build_component_expr "$ids_nl" "$NAME" "$TYPES")
+  body=$(jq -cn --argjson e "$expr" '{QueryFilter:{expression:$e}}')
+  if ! paginate_query "ComponentMetadata" "$body" "$pages"; then
+    log_activity "component-search" "fail" "$RESPONSE_CODE" \
+      "$(jq -cn --arg folder "$FOLDER" --arg name "$NAME" --arg types "$TYPES" \
+         --arg err "${RESPONSE_BODY:0:500}" \
+         '{mode:"component-metadata", folder:$folder, name:$name, types:$types, stage:"query", error:$err}')"
+    return 1
+  fi
+  total_reported=$((total_reported + TOTAL_COUNT))
+}
+
+if [[ "$folder_count" -gt "$FOLDER_ID_BATCH" ]]; then
+  batch=""
+  batch_n=0
+  while IFS= read -r fid; do
+    [[ -z "$fid" ]] && continue
+    batch+="${fid}"$'\n'
+    batch_n=$((batch_n + 1))
+    if [[ "$batch_n" -ge "$FOLDER_ID_BATCH" ]]; then
+      run_batch "$batch" || exit 1
+      batch=""; batch_n=0
+    fi
+  done <<< "$folder_ids_nl"
+  [[ -n "$batch" ]] && { run_batch "$batch" || exit 1; }
+else
+  run_batch "$folder_ids_nl" || exit 1
 fi
+TOTAL_COUNT=$total_reported
 
 out_tmp="${out_file}.tmp"
 TMPFILES+=("$out_tmp")
@@ -395,6 +362,9 @@ jq -n \
   --arg ts "$timestamp" \
   --arg folder "$FOLDER" \
   --arg folder_ids "$folder_ids_nl" \
+  --argjson folder_scope "$folder_scope_json" \
+  --argjson recursive "$([[ "$RECURSIVE" == true ]] && echo true || echo false)" \
+  --argjson truncated "$TRUNCATED" \
   --arg name "$NAME" \
   --arg types "$TYPES" \
   --slurpfile pages "$pages" \
@@ -404,10 +374,13 @@ jq -n \
       query: "component-metadata",
       filters: {
         folder: (if $folder == "" then null else $folder end),
+        recursive: $recursive,
         resolvedFolders: (if $folder_ids == "" then null else ($folder_ids | split("\n") | map(select(length > 0))) end),
+        folderScope: $folder_scope,
         name: (if $name == "" then null else $name end),
         type: (if $types == "" then null else ($types | split(",") | map(gsub("^\\s+|\\s+$"; ""))) end)
       },
+      truncated: $truncated,
       implicitFilters: { currentVersion: true, deleted: false }
     },
     records: (($pages | add) // [])
@@ -418,7 +391,13 @@ count=$(jq '.records | length' "$out_file")
 
 log_activity "component-search" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg folder "$FOLDER" --arg name "$NAME" --arg types "$TYPES" \
+     --argjson recursive "$([[ "$RECURSIVE" == true ]] && echo true || echo false)" \
+     --argjson truncated "$TRUNCATED" \
+     --argjson folders "$folder_count" \
      --argjson c "$count" --argjson total "$TOTAL_COUNT" \
-     '{mode:"component-metadata", folder:$folder, name:$name, types:$types, records:$c, total:$total}')"
+     '{mode:"component-metadata", folder:$folder, recursive:$recursive, truncated:$truncated, folder_count:$folders, name:$name, types:$types, records:$c, total:$total}')"
 
 echo "Found ${count} component(s) (total reported: ${TOTAL_COUNT}) → ${out_file}"
+if [[ "$TRUNCATED" == true ]]; then
+  echo "WARN: folder scope was truncated at the ${FOLDER_SCOPE_MAX}-folder cap — these results are partial." >&2
+fi

@@ -167,7 +167,7 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── mft_connector_step.md    # MFT operations. Use when: picking up or dropping off files via Boomi MFT (Thru)
 │   │   ├── mail_imap_connector_step.md # Mail (IMAP) connector step. Use when: sending email via SMTP, receiving email via IMAP (with attachment handling), or moving messages between mailbox folders (for `connectorType="mail"`: see components/mail_component.md)
 │   │   ├── event_streams_steps.md   # Event Streams operations. Use when: pub/sub messaging, event-driven processing, async communication between processes
-│   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes
+│   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes, or sending files to an agent for extraction/review
 │   │   ├── message_step.md      # Template engines for generating content. Use when: building payloads, creating test data, clearing documents
 │   │   ├── map_step.md          # Data transformation between profiles. Use when: transforming existing structured data between different schemas
 │   │   ├── set_properties_step.md # Variable creation (DDPs/DPPs). Use when: extracting values for later use, building dynamic paths, managing state, setting arbitrary variables
@@ -175,14 +175,15 @@ Default to the local `references/` content — it is curated and verified for th
 │   │   ├── data_process_custom_scripting.md # Use when: writing Groovy (1.5/2.4) or JavaScript in Data Process steps, either inline or referencing a reusable Process Script component - development philosophy, dataContext patterns, property management, language tokens, critical rules
 │   │   ├── decision_step.md     # Conditional routing based on comparisons. Use when: implementing if/then logic, routing based on property values or field comparisons
 │   │   ├── route_step.md        # Multi-path conditional routing. Use when: routing documents to 3+ paths based on a value (switch/case), replacing chained decision steps
+│   │   ├── business_rules_step.md # Named-rule document validation with Accepted/Rejected routing. Use when: validating a document against one or more conditions where the failure reason must be reported, or replacing Decision chains that exist only to validate
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows
 │   │   ├── flow_control_step.md # Batching and parallel fiber execution. Use when: serializing downstream steps per-document, splitting documents into batches, or spreading documents across parallel threads/processes
-│   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches
+│   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches, wiring multiple return paths so they stay readable on the canvas
 │   │   ├── process_route_step.md # Use when: dynamically selecting which subprocess runs from a route key resolved at execution time (vs a static Process Call). Requires a Process Route component, the resource::rout: reference prefix, and independent deploy of every participant.
 │   │   ├── try_catch_step.md    # Error handling and exception routing. Use when: wrapping operations that may fail, implementing process-wide error handling
 │   │   ├── exception_step.md   # Terminate execution with error message. Use when: failing a document or process on validation failure, unhappy-path exits from Decision/Route
 │   │   ├── notify_step.md       # Debug logging with variable substitution. Use when: debugging execution flow, logging property values, logging document payloads at certain points in a process
-│   │   ├── return_documents_step.md # Terminal step returning documents to caller. Use when: ending subprocess execution and returning data to parent, returning API responses
+│   │   ├── return_documents_step.md # Terminal step returning documents to caller. Use when: ending subprocess execution and returning data to parent, returning API responses, deciding between one shared terminal and one per outcome
 │   │   ├── stop_step.md         # Terminal step ending path without returning documents. Use when: ending a processing path on success without data return, halting execution after unhappy-path Decision/Route
 │   │   ├── fss_start_step.md    # Flow Services Server start step. Use when: creating process entry points for Flow-callable Integration processes
 │   │   ├── mcp_server_start_step.md  # MCP Server entry point. Use when: creating listener processes that expose tools to AI agents via MCP protocol
@@ -202,6 +203,7 @@ Default to the local `references/` content — it is curated and verified for th
     ├── boomi-common.sh          # Shared utilities sourced by all tools
     ├── boomi-env-check.sh       # Report which .env vars are set without revealing values (pre-flight)
     ├── boomi-folder-create.sh   # Create organized project folders on platform
+    ├── boomi-folder-list.sh     # List a folder's child folders or whole subtree (id + fullPath)
     ├── boomi-component-create.sh # Create new components and push to platform
     ├── boomi-component-push.sh  # Update existing components with local changes
     ├── boomi-component-pull.sh  # Download components with dependency resolution
@@ -214,7 +216,7 @@ Default to the local `references/` content — it is curated and verified for th
     ├── boomi-undeploy.sh        # Remove deployments from runtime environment
     ├── boomi-version-history.sh # List component version history (versions, dates, branch, current status)
     ├── boomi-component-diff.sh  # Compare two versions of a component (structured JSON diff)
-    ├── boomi-component-search.sh # Query components by folder/name/type/reference; writes JSON to active-development/inventories/
+    ├── boomi-component-search.sh # Query components by folder (flat or --recursive)/name/type/reference; writes JSON to active-development/inventories/
     ├── boomi-extensions.sh      # Get/set environment extension values via EnvironmentExtensions API; auto-snapshots current state before every write
     ├── event-streams-setup.sh   # Create Event Streams topics and subscriptions
     └── boomi-branch.sh         # Branch and merge operations (list, create, delete, merge, status)
@@ -333,7 +335,11 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 - `boomi-component-diff.sh` - Compare two versions of a component via ComponentDiffRequest
     - Required: `--component-id`, `--source <N>`, `--target <N>`
 
-- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%>` (flat, multiple matches unioned), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries.
+- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries.
+    - 0 components in a folder usually means they sit in subfolders — retry with `--recursive` before reporting the folder empty.
+
+- `boomi-folder-list.sh` - List folders as `id<TAB>fullPath`, plus `active-development/inventories/folder_list_<timestamp>.json`
+    - No args lists top-level folders; `--folder <id|name|%pattern%|path>` lists its children, `--recursive` its whole subtree
 
 - `boomi-branch.sh` - Branch and merge operations (only for Branch & Merge enabled accounts)
     - `list` — list all branches
@@ -489,7 +495,7 @@ See `references/guides/boomi_error_reference.md` Issue #7 for folder placement v
 **Handling Blocked Dependencies:**
 When dependencies are unavailable (missing credentials, GUI-required components, API access pending), use placeholder pattern: Create named placeholder step → Add parallel test Message step with mock data → Route both to downstream logic → Replace placeholder when dependency available. Inform user of blocking issue.
 
-**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) require GUI for initial setup. For all connections, follow the connection discovery workflow (see § Connection Discovery above) — re-use existing connections or have the user create new ones in the GUI. Once pulled, preserve encrypted values exactly during subsequent pull/push cycles.
+**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) require GUI for initial setup. For all connections, follow the connection discovery workflow (see § Connection Discovery above) — re-use existing connections or have the user create new ones in the GUI. Once pulled, preserve encrypted values exactly during subsequent pull/push cycles. **REST Client connections are an exception: never re-push a pulled one** — its `type="password"` value is a platform token, not the password, and pushing it back breaks authentication with no design-time error. See `references/components/rest_connection_component.md` § Password Encryption.
 
 ### Step Addition Workflow
 **ALWAYS read `references/steps/[step_type].md` completely before writing XML.**
@@ -500,6 +506,8 @@ When dependencies are unavailable (missing credentials, GUI-required components,
 3. Follow exact XML structure from documentation
 4. Validate before push
 5. Read sync state and update dependent component references
+
+**Wiring rule:** never wire two outcomes of one step to the same target step — the labels overprint and the canvas becomes unreadable. Interpose one inert Notify per outcome; see `references/BOOMI_THINKING.md` § Converging Outcomes.
 
 **Common XML Mistakes** (see `references/guides/boomi_error_reference.md` Issue #8):
 - Set Properties: Use `shapetype="documentproperties"` NOT `"setproperties"`

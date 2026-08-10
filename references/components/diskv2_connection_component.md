@@ -42,13 +42,11 @@ Disk V2 connection components configure file system access for the Disk V2 conne
 
 ## Directory Configuration
 
-Runtimes (referred to as "atoms" in the platform API and installation paths) have different directory access depending on type:
+> **CRITICAL — default to `work/{purpose}`** (e.g. `work/output`). On cloud runtimes, writes are permitted under `work` and its subdirectories; a path outside it, such as `/tmp`, is denied at execution with a `java.io.FilePermission` error. Local runtimes are bounded only by the runtime's OS user.
+>
+> Do not read the runtime's type from its name — a runtime named "Atom" can be type `CLOUD`. The type is the `Atom.type` field, values `CLOUD | ATOM | MOLECULE | CLOUDMOLECULE`. When the target type is unknown, use `work/{purpose}`.
 
-**Cloud runtimes**: Only `work` and `temp` directories are writable. Subdirectories within these are allowed.
-
-**Local runtimes**: Any directory accessible to the runtime's OS user.
-
-**Path formats**: Local paths (`/tmp`, `C:\TEMP`), UNC paths (`\\server\share`), or NFS paths. Can be absolute or relative to the runtime installation directory.
+**Path formats**: Relative paths resolve against the runtime installation directory. `work` alone and nested subdirectories (`work/a/b/c`) are both valid, and missing subdirectories are created when the operation sets `createDir=true`. On local runtimes, absolute paths (`/data/inbound`, `C:\TEMP`), UNC paths (`\\server\share`), and NFS paths additionally require an OS user that can reach them; on cloud runtimes all three fall outside `work` and are denied.
 
 **Override behavior**: The connection `directory` serves as the default. It can be overridden per-document using the `connector.disk-sdk.directory` document property (set via Set Properties step). When no document property override is set, the connection value is used. If both are empty, the connector returns error `[6]`:
 ```

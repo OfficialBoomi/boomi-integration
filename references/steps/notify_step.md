@@ -3,6 +3,10 @@
 ## Contents
 - Purpose
 - Quote Escaping Warning
+- Log Output and the Empty Message
+- Checkbox Attributes and Polarity
+- Title
+- Message Level
 - Configuration Structure
 - perExecution Attribute Behavior
 - Parameter Value Types (full reference: `references/guides/parameter_value_types.md`)
@@ -22,6 +26,67 @@ Notify steps log messages to execution logs for debugging and monitoring.
 - Logging errors in catch paths (especially `meta.base.catcherrorsmessage`)
 
 **Note:** Notify steps allow documents to pass through - they're non-blocking logging statements. The most common notify step error happens when referencing a profile entry variable and receiving an unexpected payload type (e.g. the step references a JSON profile entry but the incoming document to the step is not valid JSON).
+
+## Log Output and the Empty Message
+A Notify contributes **exactly three process-log lines per step execution** — a step-entry line, the message line, and a step-exit line — **regardless of how many documents are in flight**. The entry line reports the true count (`Executing Notify Shape with N document(s).`) but the line count is still three. The entry and exit lines are step-lifecycle lines the engine emits, not Notify output.
+
+With `perExecution="false"` (the default) the message is evaluated once per document, and all N renderings are **concatenated into that single message line with no separator between them** — so the document count changes the *width* of the line, never the *number* of lines.
+
+The **entire template** is rendered each time, not just the substituted value, so any literal text in it repeats N times. A label before the placeholder — `[DOC] {1} ` — therefore marks the start of each payload and makes the boundaries readable. Prefer a leading token over a trailing one: the process log **right-trims** the assembled message line, so a trailing delimiter's final occurrence loses any trailing whitespace.
+
+Newlines cannot separate the renderings. A newline in the template, or inside substituted content, is **replaced with a single space** in the process log — it survives storage but not logging, so it is indistinguishable from having typed a space. One message line per step execution is the floor; per-document lines are not achievable from the Notify's configuration.
+
+Nothing on the step reduces the three — not `disableEvent`, `enableUserLog`, `notifyMessageLevel`, `perExecution`, nor an empty `notifyMessage`. The process-level `processLogOnErrorOnly="true"` does not suppress them either at `workload="general"`.
+
+`<notifyMessage>` is a **required** child of `<notify>`. It may be empty but not omitted — omitting the element fails on push with `cvc-complex-type.2.4.a: ... One of '{notifyMessage}' is expected`.
+
+The message line is formatted `<title>: <notifyMessage>` — see [Title](#title). With the stock `title=""`, that leading `: ` is the title separator, not part of the message.
+
+An empty message does **not** silence the step. With an empty message and an empty title the line is a bare `:`. The line count is unchanged from a populated message, so there is nothing to gain by emptying it — a populated message costs the same and is legible. An authored `<notifyMessage></notifyMessage>` is stored as `<notifyMessage/>` and is stable across a GUI round trip: the canvas accepts an empty message box, does not require a value, and does not back-fill one.
+
+## Checkbox Attributes and Polarity
+Three of the four `<notify>` attributes map to dialog checkboxes, and **one is inverted**:
+
+| Dialog checkbox | Attribute | Checked | Unchecked |
+|---|---|---|---|
+| Generate Platform Event | `disableEvent` | **`false`** | **`true`** |
+| Write to Local Runtime User Log | `enableUserLog` | `true` | `false` |
+| Write Once Per Execution | `perExecution` | `true` | `false` |
+
+`disableEvent` names what `true` *disables*, which is the opposite of what the checkbox enables. **Read the attribute name, not the checkbox label.** Reasoning from the label produces the wrong value every time.
+
+**`disableEvent` and `enableUserLog` are additive to the process log** — neither suppresses nor alters process-log output. (`perExecution` changes the message line's content but not the line count — see [perExecution Attribute Behavior](#perexecution-attribute-behavior).)
+- **`disableEvent="false"`** generates a `user.notification` platform event, consumable via email alerts, the account RSS feed, and the platform API. `disableEvent="true"` generates none.
+- **`enableUserLog="true"`** additionally writes the message to the runtime's local user log — a file per **process** under `<runtime_installation_directory>/logs/`, not one per step. The step-level `enableUserLog` on `<notify>` is a separate setting from the same-named process-level attribute on `<process>`; neither affects the other.
+
+A new Notify step created in the GUI has all three boxes unchecked, matching the three checkbox attributes in the stock line every example here ships:
+
+```xml
+<notify disableEvent="true" enableUserLog="false" perExecution="false" title="">
+```
+
+`<notify>` stores exactly what is authored and back-fills nothing — unlike `<process>`, which serializes all of its option attributes on every save. A missing attribute stays missing and is resolved at request time: an omitted `disableEvent` behaves as `"true"` and generates no event. `title` is the one attribute never to omit — see below.
+
+## Title
+`title` is a first-class setting with a Title field in the dialog, not boilerplate. It appears on two surfaces:
+
+| Surface | How `title` relates to `notifyMessage` |
+|---|---|
+| Process log | Concatenated into one line: `<title>: <notifyMessage>` |
+| Platform event | Two separate fields — `Title:` and `Message:` — in the event body |
+
+`title` does not appear in the event's headline, in the RSS feed or in the event body's own headline line, so events are told apart only by reading their `Title:` and `Message:` fields. Populating it is still worth doing — it labels the event body and prefixes the process-log line — but it will not make events distinguishable in a feed reader's subject line.
+
+**Never omit the attribute.** `title=""` and a missing `title` are not equivalent at request time: an omitted `title` logs the literal string `null` as the prefix (`null: <message>`). Since the attribute looks like an empty-string no-op, dropping it as noise is an easy mistake with a visible cost on every Notify line of every execution.
+
+## Message Level
+`notifyMessageLevel` sets the level field of the **message line only** — the step-entry and step-exit lines are always `INFO`. The GUI's Message Level radio offers three values, Information / Warning / Error, written as `INFO`, `WARNING` and `ERROR`.
+
+**`ERROR` is written to the process log as `SEVERE`.** The XML token and the log token differ, so grep for `SEVERE` when hunting error-level Notify output.
+
+The element is **not validated**: any string pushes successfully and is stored verbatim. A GUI save preserves an unrecognized value as long as the step's own dialog is not opened. Matching is case-insensitive (`info` behaves as `INFO`), and **any unrecognized value falls back to `SEVERE`** — the loudest level, not the quietest. `DEBUG` is accepted but is not a real level and produces `SEVERE`-labeled output. Use only `INFO`, `WARNING` or `ERROR`.
+
+The level is a label on one log line: it does not change execution status, does not halt the document, and cannot reduce log volume.
 
 ## Quote Escaping Warning
 
@@ -70,6 +135,8 @@ The `perExecution` attribute controls how many times the Notify step executes:
 |--------------|----------------|------------------|
 | `false` (default) | Message evaluated once per document (keygen/unique produce a new value per document) | Yes |
 | `true` | One aggregated evaluation per execution | No — document-scoped parameters **cause an error** |
+
+`perExecution="true"` does **not** reduce process-log line count — both settings cost three lines per step execution. Its only process-log effect is that the message line carries one rendering instead of N concatenated ones, which is a legibility gain at large N, not a volume one.
 
 ### Safe Use of perExecution="true"
 
