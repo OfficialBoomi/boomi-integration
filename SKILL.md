@@ -76,7 +76,7 @@ When working on any Boomi process or component modifications:
 **Large Profiles**: When attempting to read an XML profile file and encountering a "file too large" error, immediately run `boomi-profile-inspect.py` (Python stdlib) on it. This generates a searchable `distilled_<name>.json` file alongside the source profile XML. Search that file for field keys/paths, and grep the original XML by key if comments are needed.
 
 **External Documentation Strategy:**
-Default to the local `references/` content — it is curated and verified for this skill's use cases. As a fallback, `developer.boomi.com` and `help.boomi.com` are fetchable and can supplement local docs. `community.boomi.com` remains inaccessible (JavaScript-heavy). If all sources fail: ask the user to paste content. Do not proceed without critical information.
+Default to local `references/` — curated for this skill. Beyond it, don't answer platform behavior from memory: start at `https://developer.boomi.com/llms.txt` (root, no `/md`), which fans out to per-section indexes of every page that has a Markdown twin. Fetch a listed page as Markdown by prepending `/md` and appending `.md` (`https://developer.boomi.com/md/docs/Connectors/Testing_connector.md`); unlisted paths return 404 with an HTML body despite the extension, so branch on status and fall back to the HTML page. Prefer the `.md` form for `/docs/api/*` — same operations and schemas at a fraction of the HTML's size — and link users the frontmatter `canonical_html_url`, never the spec JSON. `help.boomi.com` (HTML) works, `community.boomi.com` does not (JavaScript-heavy); if all sources fail, ask the user to paste content — don't proceed without critical information.
 
 **Skill Repository:**
 ```

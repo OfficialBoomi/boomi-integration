@@ -15,16 +15,12 @@ get_jwt() {
   local ssl_flag=""
   [[ "${BOOMI_VERIFY_SSL:-true}" == "false" ]] && ssl_flag="-k"
 
-  local auth_string="BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}"
-  local auth_b64
-  # base64 -w0 (Linux) or plain base64 (macOS) — suppress line wraps
-  auth_b64=$(printf '%s' "$auth_string" | base64 | tr -d '\n')
-
-  curl -s $ssl_flag \
-    --max-time 30 \
-    -A "$BOOMI_USER_AGENT" \
-    -H "Authorization: Basic ${auth_b64}" \
-    "${BOOMI_API_URL}/auth/jwt/generate/${BOOMI_ACCOUNT_ID}"
+  curl_cfg user "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
+    | curl -s $ssl_flag \
+        --max-time 30 \
+        -A "$BOOMI_USER_AGENT" \
+        -K - \
+        "${BOOMI_API_URL}/auth/jwt/generate/${BOOMI_ACCOUNT_ID}"
 }
 
 graphql() {
@@ -39,13 +35,14 @@ graphql() {
   local payload
   payload=$(jq -n --arg q "$query" --argjson v "$variables" '{query: $q, variables: $v}')
 
-  curl -s $ssl_flag \
-    --max-time 30 \
-    -A "$BOOMI_USER_AGENT" \
-    -H "Authorization: Bearer ${jwt}" \
-    -H "Content-Type: application/json" \
-    -d "$payload" \
-    "${BOOMI_API_URL}/graphql"
+  curl_cfg header "Authorization: Bearer ${jwt}" \
+    | curl -s $ssl_flag \
+        --max-time 30 \
+        -A "$BOOMI_USER_AGENT" \
+        -K - \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "${BOOMI_API_URL}/graphql"
 }
 
 # --- Commands ---
@@ -198,12 +195,13 @@ rest_produce() {
     [[ -z "$token_data" ]] && { echo "ERROR: No produce-enabled token found for this environment" >&2; return 1; }
   fi
 
-  curl -s --max-time 30 \
-    -A "$BOOMI_USER_AGENT" \
-    -H "Authorization: Bearer ${token_data}" \
-    -H "Content-Type: application/json" \
-    -d "$payload" \
-    "$url"
+  curl_cfg header "Authorization: Bearer ${token_data}" \
+    | curl -s --max-time 30 \
+        -A "$BOOMI_USER_AGENT" \
+        -K - \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$url"
   echo
 }
 

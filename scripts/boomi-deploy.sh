@@ -103,9 +103,10 @@ if [[ -n "$wss_op_id" && -n "${SERVER_BASE_URL:-}" && -n "${SERVER_USERNAME:-}" 
     # wrong perimeter creds return 401 for any path including nonexistent ones,
     # which would make the real probe's response unreadable as a collision signal.
     baseline_path="/ws/simple/_bcCollisionBaseline_${RANDOM}${RANDOM}"
-    baseline_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-      $ssl_flag -A "$BOOMI_USER_AGENT" -X HEAD -u "${SERVER_USERNAME}:${SERVER_TOKEN}" \
-      "${SERVER_BASE_URL}${baseline_path}" 2>/dev/null; true)
+    baseline_code=$(curl_cfg user "${SERVER_USERNAME}:${SERVER_TOKEN}" \
+      | curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+        $ssl_flag -A "$BOOMI_USER_AGENT" -X HEAD -K - \
+        "${SERVER_BASE_URL}${baseline_path}" 2>/dev/null; true)
     [[ -z "$baseline_code" ]] && baseline_code="000"
 
     if [[ "$baseline_code" == "401" ]]; then
@@ -113,9 +114,10 @@ if [[ -n "$wss_op_id" && -n "${SERVER_BASE_URL:-}" && -n "${SERVER_USERNAME:-}" 
       echo "Skipping WSS path collision check: baseline HTTP 401 from ${baseline_path} (a known-nonexistent path) indicates SERVER_USERNAME/SERVER_TOKEN are being rejected by the runtime's perimeter — typically stale or wrong cloud-attachment credentials. Verify those credentials and re-run if collision detection is needed."
       echo ""
     else
-      probe_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
-        $ssl_flag -A "$BOOMI_USER_AGENT" -X HEAD -u "${SERVER_USERNAME}:${SERVER_TOKEN}" \
-        "${SERVER_BASE_URL}${wss_path}" 2>/dev/null; true)
+      probe_code=$(curl_cfg user "${SERVER_USERNAME}:${SERVER_TOKEN}" \
+        | curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+          $ssl_flag -A "$BOOMI_USER_AGENT" -X HEAD -K - \
+          "${SERVER_BASE_URL}${wss_path}" 2>/dev/null; true)
       [[ -z "$probe_code" ]] && probe_code="000"
 
       if [[ "$probe_code" != "404" && "$probe_code" != "000" ]]; then

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.48
+
+- Document when map tagLists are required
+
+
+## 1.0.47
+
+- Fetch developer.boomi.com docs as Markdown via the `/md` path convention, starting from the `llms.txt` indexes
+
+
+## 1.0.46
+
+- Credentials now reach curl on stdin instead of the command line (CWE-214)
+- Credentials are no longer exported into child process environments
+
+
 ## 1.0.45
 
 - Documented converging outcomes on the canvas

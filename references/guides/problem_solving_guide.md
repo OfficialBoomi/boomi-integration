@@ -22,7 +22,7 @@ Boomi's architecture is highly consistent. Most "unknown" things are variations 
 
 ## Tier 3: Consult External Sources
 
-Offer to fetch from `developer.boomi.com` or `help.boomi.com` for connector guides, API schemas, or release notes. User-provided documentation, examples, or screenshots take priority over web sources.
+Offer to fetch from `developer.boomi.com` or `help.boomi.com` for connector guides, API schemas, or release notes, following the fetch mechanics in SKILL.md's External Documentation Strategy — start at the `llms.txt` index rather than guessing paths. User-provided documentation, examples, or screenshots take priority over web sources.
 
 ## Tier 4: Structured Experimentation
 

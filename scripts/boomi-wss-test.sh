@@ -104,10 +104,12 @@ ssl_flag=""
 curl_args=($ssl_flag -s -w "\n--- HTTP %{http_code} (%{time_total}s) ---" \
   --max-time 30 -A "$BOOMI_USER_AGENT" -X "$METHOD")
 
+auth_cfg=""
 case "$auth_type" in
-  basic)  curl_args+=(-u "${SERVER_USERNAME}:${SERVER_TOKEN}") ;;
-  bearer) curl_args+=(-H "Authorization: Bearer ${SERVER_BEARER_TOKEN}") ;;
+  basic)  auth_cfg="$(curl_cfg user "${SERVER_USERNAME}:${SERVER_TOKEN}")" ;;
+  bearer) auth_cfg="$(curl_cfg header "Authorization: Bearer ${SERVER_BEARER_TOKEN}")" ;;
 esac
+[[ -n "$auth_cfg" ]] && curl_args+=(-K -)
 
 if [[ -n "$DATA" ]]; then
   if [[ -f "$DATA" ]]; then
@@ -121,5 +123,5 @@ url="${SERVER_BASE_URL}${WSS_PATH}"
 banner="auth=${auth_type}"
 $auth_inferred && banner="${banner} (inferred — set SERVER_AUTH_TYPE in .env to declare explicitly)"
 echo "Testing: ${METHOD} ${url}  (${banner})"
-curl "${curl_args[@]}" "$url" 2>/dev/null; true
+printf '%s' "$auth_cfg" | curl "${curl_args[@]}" "$url" 2>/dev/null; true
 echo ""

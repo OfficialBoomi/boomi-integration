@@ -342,6 +342,8 @@ Key patterns that fail silently without errors:
 - **UDF wiring keys**: Inside a User-Defined Function, a Mapping pointing at a nonexistent port key is accepted on push and executes without error — the wire is silently dropped and the downstream input reads empty (wrong output, no failure). NamePaths are decorative; only keys are checked, and only by you
 - **UDF interface drift**: Changing a User-Defined Function's interface keys breaks consuming maps at execution with a misleading error blaming the *source profile* — see `components/user_defined_function_component.md`
 - **Document cache key `taglistKey="-1"`**: accepted on push, but Add to Cache silently indexes nothing — the cache stays empty. Use `0` outside taglists
+- **Map fan-in to a repeating element**: two mappings from non-repeating source fields to the same repeating target key collapse into one instance, last-write-wins — the earlier value is discarded and execution reports COMPLETE. Use `toTagListKey` to route each mapping to its own instance
+- **Target hierarchy that doesn't mirror the source**: a nested source array mapped to sibling repeating target elements flattens — every value survives, so nothing looks wrong, but the parent-child grouping is gone. Nest the target profile to match the source
 - **Split output shape**: Split Documents keeps the parent wrapper (JSON and XML) — a Set Properties or Route key written for a bare element reads empty, no error
 - **Process Route reference prefix**: A `processRouteId` missing the `resource::rout:` prefix is accepted on push and deploy, failing only at execution
 - **XML schema mistakes**: Common validation errors

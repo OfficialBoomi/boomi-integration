@@ -846,12 +846,14 @@ response = requests.get(url, verify=self.verify_ssl)
 # SSL verification helper (add -k flag if SERVER_VERIFY_SSL=false)
 SSL_FLAG=$([ "${SERVER_VERIFY_SSL}" = "false" ] && echo "-k" || echo "")
 
-# Inline JSON with SSL support
-curl $SSL_FLAG -X POST \
-  -u "${SERVER_USERNAME}:${SERVER_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"value"}' \
-  "${SERVER_BASE_URL}/ws/simple/endpoint"
+# Inline JSON with SSL support. curl_cfg puts the credentials on stdin and escapes
+# them; -u would leak them to the command line.
+source <skill-path>/scripts/boomi-common.sh
+curl_cfg user "${SERVER_USERNAME}:${SERVER_TOKEN}" \
+  | curl $SSL_FLAG -X POST -K - \
+      -H "Content-Type: application/json" \
+      -d '{"key":"value"}' \
+      "${SERVER_BASE_URL}/ws/simple/endpoint"
 ```
 
 ### Configuration Separation
@@ -1285,16 +1287,20 @@ So the registry can answer "what listeners are active on this runtime?" but cann
 **Step 1 — enumerate active listeners via ListenerStatus async query:**
 
 ```bash
+# curl_cfg puts the credentials on stdin and escapes them; -u would leak them to
+# the command line.
+source <skill-path>/scripts/boomi-common.sh
+auth() { curl_cfg user "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}"; }
+
 # Start async query
-curl -X POST "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/query" \
-  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
+auth | curl -K - -X POST "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/query" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -d '{"QueryFilter":{"expression":{"operator":"EQUALS","property":"containerId","argument":["'${BOOMI_TEST_ATOM_ID}'"]}}}'
 # Returns {"asyncToken":{"token":"ListenerStatus-..."}}
 
 # Poll for results (replace TOKEN)
-curl "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/response/{TOKEN}" \
-  -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" -H "Accept: application/json"
+auth | curl -K - "${BOOMI_API_URL}/${BOOMI_ACCOUNT_ID}/async/ListenerStatus/response/{TOKEN}" \
+  -H "Accept: application/json"
 ```
 
 A successful response has the shape:

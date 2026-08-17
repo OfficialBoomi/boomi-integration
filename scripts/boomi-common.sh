@@ -9,9 +9,8 @@ set -euo pipefail
 load_env() {
   local env_file=".env"
   if [[ -f "$env_file" ]]; then
-    set -a
+    # No set -a: .env values are read in-shell, never handed to child processes.
     source "$env_file"
-    set +a
     _set_user_agent   # .env must not override the header
   else
     echo "ERROR: .env file not found in $(pwd)" >&2
@@ -64,6 +63,20 @@ _set_user_agent
 
 # --- API helpers ---
 
+# Emits a curl config file on stdout for `curl -K -`, keeping credentials out of argv.
+# Usage: curl_cfg user "u:p" header "Authorization: Bearer t" | curl -K - ...
+curl_cfg() {
+  (( $# % 2 == 0 )) || { echo "ERROR: curl_cfg needs directive/value pairs" >&2; return 1; }
+  local val
+  while [[ $# -gt 1 ]]; do
+    val="$2"
+    val="${val//\\/\\\\}"
+    val="${val//\"/\\\"}"
+    printf '%s = "%s"\n' "$1" "$val"
+    shift 2
+  done
+}
+
 build_api_url() {
   local endpoint="$1"
   local verbose="${2:-true}"
@@ -92,11 +105,12 @@ boomi_curl() {
   local ssl_flag=""
   [[ "${BOOMI_VERIFY_SSL:-true}" == "false" ]] && ssl_flag="-k"
 
-  curl -s $ssl_flag \
-    --max-time "${BOOMI_TIMEOUT:-60}" \
-    -A "$BOOMI_USER_AGENT" \
-    -u "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
-    "$@"
+  curl_cfg user "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
+    | curl -s $ssl_flag \
+        --max-time "${BOOMI_TIMEOUT:-60}" \
+        -A "$BOOMI_USER_AGENT" \
+        -K - \
+        "$@"
 }
 
 # High-level API call: captures body and http code cleanly via temp file.

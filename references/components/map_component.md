@@ -30,11 +30,10 @@ Maps transform documents from one profile structure to another. They are the pri
 ### Mapping Approach
 Boomi maps use **key-based mapping** where keys correspond to fields in the profile structure. Profile keys are assigned by the platform during profile creation using hierarchical depth-first traversal.
 
-Boomi auto-generates additional attributes (keyPath, namePath) to support the mapping process.
+keyPath and namePath attributes are display metadata — the engine matches on `fromKey`/`toKey` alone. See § Mapping Patterns.
 
 ### Array Handling
-- Define the mapping pattern once for repeating elements
-- Boomi automatically iterates over arrays/collections
+One `Mapping` per leaf field covers every occurrence of a repeating element — the engine iterates. How many output documents that produces is governed by the target profile; see § Instance Identifier and Qualifier Mappings.
 
 ## Component Structure
 
@@ -195,7 +194,7 @@ When profile fields have `dataType="datetime"`, Boomi's internal datetime pipeli
          toKey="8" toType="profile"/>
 ```
 
-**Key Discovery**: Profile keys are assigned by the Boomi platform during profile creation. Keys follow the hierarchical structure of the profile (depth-first traversal). The platform automatically generates complementary keyPath and namePath attributes. Entries that are manually created by a user after the main profile is generated may not align with the expected sequencing.
+**Key Discovery**: Profile keys are assigned by the Boomi platform during profile creation. Keys follow the hierarchical structure of the profile (depth-first traversal). Complementary keyPath and namePath attributes are added on a GUI save — a map created through the API keeps exactly the attributes it was pushed with, and a push/pull round trip will not generate them. Entries that are manually created by a user after the main profile is generated may not align with the expected sequencing.
 
 ### Important Attributes
 - `fromType="profile"` and `toType="profile"` are **REQUIRED**
@@ -206,8 +205,24 @@ When profile fields have `dataType="datetime"`, Boomi's internal datetime pipeli
 
 When source or target profiles use instance identifiers and qualifiers (tagLists), mappings need additional attributes to specify which loop instance to read from or write to.
 
-**Repeating source document splitting**: When a map reads from a repeating source element (EDI loop, XML element, JSON array, or Flat File record) and maps it to a non-repeating target, the map engine produces a separate output document per iteration of the repeating element. Non-repeating source fields are duplicated across all split documents. Multiple repeating sources mapped to flat targets multiply: 2 REF iterations × 2 N1 iterations = 4 documents per transaction. Three prevention mechanisms:
-- **Repeating target element**: When the target is also repeating (arrays, repeating XML elements), iterations become children of a single output document. Use nested target profiles that mirror the source hierarchy.
+### When tagLists Are Needed
+
+**Whether tagLists are needed is decided by the source, not the target.** A repeating target element alone never requires them — reaching for them when the source already repeats adds configuration that does no work. A repeating source means an EDI loop, a repeating XML element, a JSON array, or a Flat File record.
+
+| Source | Target | Result | tagLists |
+|---|---|---|---|
+| Repeating | Repeating (`maxOccurs="-1"`) | 1 document, N target occurrences in source order | Not needed |
+| Repeating | Non-repeating | N split documents, non-repeating fields duplicated across all | Not needed — set the target to `maxOccurs="-1"` |
+| N non-repeating fields | The same repeating element | 1 occurrence, last-write-wins | Required |
+
+A JSON array mapped to an XML element with `maxOccurs="-1"` needs only that `maxOccurs` on the target profile's element. The map itself is one `Mapping` per leaf field with no `fromTagListKey`/`toTagListKey`, and the profile's `<tagLists>` block stays empty. The engine carries the occurrence count from the data. Zero source occurrences emit no target element at all — an empty array and an absent property produce identical output.
+
+Fan-in has no data-borne occurrence count, so both mappings write to the same instance and the earlier value is discarded silently: accepted on push, deploys, and executes with status COMPLETE. `toTagListKey` supplies what is missing by naming which instance each mapping writes to.
+
+### Controlling Document Splitting
+
+Two sibling repeating sources mapped to a non-repeating target multiply: a source carrying 2 `refs` and 2 `parties` yields 4 output documents, one per combination, walked in source order with `refs` as the outer loop. Making the target elements repeating collapses the same source to a single document. Three mechanisms consolidate:
+- **Repeating target element**: When the target is also repeating (arrays, repeating XML elements), each source element is walked independently and its iterations become children of a single output document. The target hierarchy **must mirror the source nesting**. A target whose repeating elements sit as siblings where the source nests them flattens the result — every value survives and nothing splits, but the parent-child grouping is discarded, with no error and no warning.
 - **tagLists with `fromTagListKey`**: Route qualified loop iterations to different target fields, consolidating into one output document. Works across EDI, XML, and JSON profiles.
 - **`additionalElementValue` on segments**: For qualified repeating segments (e.g., REF*CN vs REF*BM), define separate segment entries in the EDI profile with `useAdditionalCriteria="true"` — each gets unique keys, eliminating the cross-product.
 
@@ -251,7 +266,7 @@ When using `toTagListKey`, Boomi automatically populates qualifier elements in t
 - All qualifier fields (elements referenced by `identifierKey` in TagExpressions) are auto-populated with their `identifierValue`
 - This works for compound qualifiers — every TagExpression in the GroupingExpression contributes
 - Explicit mappings to qualifier fields override auto-population
-- Without `toTagListKey`, mappings to the same repeating element collapse into a single instance (last-write-wins)
+- Without `toTagListKey`, multiple mappings from non-repeating source fields to the same repeating element collapse into a single instance (last-write-wins). This is the fan-in case only — a repeating source iterating into a repeating target does not need `toTagListKey`
 
 ### keyPath Pattern
 
@@ -285,16 +300,13 @@ Both attributes can coexist on a single Mapping for instanced-to-instanced routi
 ## Observed Patterns
 
 ### Array Path Notation
-JSON arrays appear with specific notation in exported maps:
-- Source path includes: `/Array/ArrayElement1/`
-- Maps still use single mapping definition
-- Boomi handles iteration automatically
+A JSON array leaf resolves to a namePath that repeats the array name, then inserts the array-element and object wrappers. For an array named `lines` carrying a `sku` field:
+```
+Root/Object/lines/lines/ArrayElement1/Object/sku
+```
 
 ### Functions Element
-Even without transformations, exported maps include:
-```xml
-<Functions optimizeExecutionOrder="true"/>
-```
+A map with no transformations carries a plain `<Functions/>` with no attributes. Once a map has functions the container carries `optimizeExecutionOrder`, which defaults to `"true"` — see references/components/map_component_functions.md § Function Execution Order.
 
 ## Complete Examples
 
