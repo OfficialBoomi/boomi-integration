@@ -18,7 +18,8 @@ Arguments:
 
 Options:
   --branch <name|id>     Target branch (name or id). Defaults to the XML's
-                         branchId, then BOOMI_DEFAULT_BRANCH_ID, then main.
+                         branchId, then BOOMI_DEFAULT_BRANCH_ID, then the
+                         account default branch.
   --allow-password-token Create a REST Client connection whose password field
                          looks like a pulled secret token (128 lowercase hex).
   --test-connection      Verify platform credentials and exit.
@@ -30,9 +31,7 @@ EOF
 }
 
 # Answer --help before load_env, which needs a workspace .env.
-for arg in "$@"; do
-  case "$arg" in -h|--help) usage; exit 0 ;; esac
-done
+if wants_help "--branch" "$@"; then usage; exit 0; fi
 
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
@@ -94,7 +93,7 @@ if [[ -n "$BRANCH_ID" ]]; then
   prepared_xml=$(inject_branch_id "$prepared_xml" "$BRANCH_ID")
   echo "Creating component '${COMPONENT_NAME}' on branch ${BRANCH:-$BRANCH_ID}"
 else
-  echo "Creating component '${COMPONENT_NAME}' on main"
+  echo "Creating component '${COMPONENT_NAME}' on the account default branch"
 fi
 
 # --- Create on platform ---
@@ -110,6 +109,11 @@ boomi_api -X POST "$url" \
   -H "Content-Type: application/xml" \
   --data-binary "@${body_file}"
 
+# Trace off across response handling: a 4xx body can echo back a submitted password.
+_xtrace_enabled=0
+case $- in *x*) _xtrace_enabled=1 ;; esac
+set +x
+
 if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
   log_activity "component-create" "fail" "$RESPONSE_CODE" \
     "$(jq -cn --arg name "$COMPONENT_NAME" --arg file "$FILE_PATH" \
@@ -119,12 +123,16 @@ if [[ "$RESPONSE_CODE" != "200" && "$RESPONSE_CODE" != "201" ]]; then
   exit 1
 fi
 
+report_response_branch "$RESPONSE_BODY" "$BRANCH_ID" "Create landed on"
+
 # --- Extract component ID from response ---
 component_id=$(echo "$RESPONSE_BODY" | xml_attr "componentId")
 if [[ -z "$component_id" ]]; then
   echo "ERROR: No componentId in create response" >&2
   exit 1
 fi
+
+if (( _xtrace_enabled )); then set -x; fi
 
 # --- Update local file with generated ID (when empty, stale, or absent) ---
 set_root_component_id "$component_id" < "$FILE_PATH" > "${FILE_PATH}.tmp" && mv "${FILE_PATH}.tmp" "$FILE_PATH"
@@ -152,6 +160,6 @@ write_sync_state "$component_id" "$FILE_PATH" "$content_hash" "$BRANCH_ID"
 
 log_activity "component-create" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$COMPONENT_NAME" --arg id "$component_id" \
-     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-main}" \
+     --arg file "$FILE_PATH" --arg branch "${BRANCH_ID:-account-default}" \
      '{component_name: $name, component_id: $id, file_path: $file, branch: $branch}')"
 echo "SUCCESS: Component '${COMPONENT_NAME}' created with ID: ${component_id}"

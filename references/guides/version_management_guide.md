@@ -17,7 +17,7 @@ Every push (update) increments the component's `version` attribute by 1 — even
 | Attribute | Behavior |
 |-----------|----------|
 | `version` | Integer, auto-incremented on every push. Server-controlled — client value ignored. |
-| `currentVersion` | `true` on the latest version, `false` on all prior versions. Server-controlled. |
+| `currentVersion` | In version history (`ComponentMetadata/query`): `true` on the current version on the account default branch, `false` elsewhere. In a branch-addressed pull response it is always `true` and means nothing. Server-controlled. See Branch Interactions. |
 | `createdDate` / `createdBy` | Immutable. Set once at component creation, never changes. |
 | `modifiedDate` / `modifiedBy` | Updated on every push to reflect who pushed and when. |
 
@@ -29,7 +29,7 @@ Version numbers are **globally sequential across all branches** for a given comp
 bash <skill-path>/scripts/boomi-version-history.sh --component-id <guid>
 ```
 
-Optional flags: `--branch <name>` (filter by branch), `--current` (current version only).
+Optional flags: `--branch <name>` (filter by branch), `--current` (current version on the account default branch only).
 
 Output shows version number, branch, modification date, modifier, and whether it's the current version.
 
@@ -75,7 +75,11 @@ Deleted components appear in version history with `deleted=true` on the deletion
 
 **Global version counter:** Version numbers are shared across all branches for a given component. Main 1-4, then a branch push creates version 5. No per-branch version sequences.
 
-**`currentVersion` is main-only.** Branch versions are never marked `currentVersion=true`. To find the latest version on a branch, use `--branch` on the version history tool and take the highest version number.
+A single branch's history is therefore legitimately **non-contiguous**: main can go v1 → v4 because v2 and v3 were writes on another branch. Gaps do not mean deleted versions. It also means "the latest version" is meaningless without naming a branch — a branch's head can carry a *lower* number than another branch's while having been written later.
+
+**`currentVersion` tracks the account default branch** — main unless the account sets another — not the highest version and not the most recent write. So `--current --branch <other>` returns nothing, for *any* branch that is not the default, even one that plainly has a current version of its own. To find the latest version on a branch, use `--branch` without `--current` and take the highest version number.
+
+It is a property of the account setting at read time, not of the version, and it means something different on a branch-addressed pull response. See `branch_merge_api_behavior.md` § Account Default Branch.
 
 **Unfiltered queries return all branches.** Version history without `--branch` returns versions from all branches interleaved. Use `--branch` to isolate a specific branch.
 

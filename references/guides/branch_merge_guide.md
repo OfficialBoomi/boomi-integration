@@ -42,7 +42,7 @@ All commands accept branch names or base64 branch IDs.
 
 ## Branch-Aware Component Operations
 
-All component tools accept a `--branch` flag (name or ID). Without it, operations target main.
+All component tools accept a `--branch` flag (name or ID). Without it, operations target the **account default branch** — main unless the account sets another, which it can do in the UI only. Pass `--branch main` to force main. Read the current setting with `boomi-branch.sh default`. See `branch_merge_api_behavior.md` § Account Default Branch.
 
 ```
 bash <skill-path>/scripts/boomi-component-pull.sh --component-id {id} --branch my-feature
@@ -56,7 +56,9 @@ Operations on a branch do not affect the main branch version.
 
 When multiple branch signals are present, tools resolve in this order:
 
-`--branch` flag > `branchId` in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main
+`--branch` flag > `branchId` in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > account default branch
+
+`BOOMI_DEFAULT_BRANCH_ID` points a workspace at one branch locally; it is unrelated to the account default branch.
 
 ### Inherited Components and Branch Pull
 
@@ -76,7 +78,11 @@ A branch's component namespace is extensible: new components can be added via cr
 
 ## Branch-Aware Deployment
 
-The deploy tool uses a two-step pattern internally: it creates a PackagedComponent first (with `branchName` from sync state if present), then deploys by `packageId`. This ensures the correct branch version is deployed.
+The deploy tool uses a two-step pattern internally: it creates a PackagedComponent first, then deploys by `packageId`. This ensures the correct branch version is deployed.
+
+The attribute it reads from the carrier XML is **`branchId`**, not `branchName` — a `branchName` attribute alone is ignored, and the deploy silently falls through to the account default branch. It resolves that `branchId` to a branch name for the PackagedComponent request, falling back to sync state, and omitting the branch entirely if neither is present.
+
+Deploying from a branch needs no merge to main — the package carries the branch's version, and that version goes to the environment.
 
 ```
 bash <skill-path>/scripts/boomi-deploy.sh path/to/component.xml
@@ -161,10 +167,10 @@ Resolution values: `OVERRIDE` (source branch wins) or `KEEP_DESTINATION` (destin
 
 ## Safety Model
 
-All CLI tools echo their branch target on every operation. See `references/guides/cli_tool_reference.md` for full branch workflow examples and safety checks.
+Tools echo the branch they target. Create and push additionally report the branch the platform actually used, and warn on a mismatch; an unqualified pull reports the branch it read from. See `references/guides/cli_tool_reference.md` for full branch workflow examples and safety checks.
 
 Key protections:
-- **Push** aborts if sync state records a branch but the XML lost its `branchId` — prevents accidental main writes
+- **Push** aborts if sync state records a branch but the XML lost its `branchId` — prevents an unqualified write landing on the account default branch. `--account-default` satisfies the guard when an unqualified push is genuinely intended, and clears the file's `branchId` on success so later plain pushes stay unqualified
 - **Deploy** uses the two-step package-then-deploy pattern for deterministic branch control
 - **Sync state** tracks `branch_id` so branch context is preserved across pull/push cycles
-- **Branch resolution priority:** `--branch` flag > `branchId` in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main
+- **Branch resolution priority:** `--branch` flag > `branchId` in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > account default branch

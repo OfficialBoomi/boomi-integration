@@ -1,8 +1,35 @@
 #!/usr/bin/env bash
 # List component version history via ComponentMetadata/query
 # Usage: bash scripts/boomi-version-history.sh --component-id <ID> [--branch NAME] [--current]
+# Also writes the full result set to active-development/inventories/version_history_<ts>.json
 
 source "$(dirname "$0")/boomi-common.sh"
+
+usage() {
+  cat <<'USAGE'
+Usage: bash scripts/boomi-version-history.sh --component-id <ID> [--branch NAME] [--current]
+
+Lists a component's version history via ComponentMetadata/query. Read-only.
+
+Required:
+  --component-id <ID>  Component ID (a tilde branch suffix is stripped)
+
+Options:
+  --branch <name>      Only versions on this branch
+  --current            Only the current version, which is the current version on
+                       the account default branch — not the highest version
+
+Without --branch, rows from every branch are returned.
+
+Output: a table of version, branch, modified date, modifier, and current flag,
+plus the full result set at active-development/inventories/version_history_<ts>.json
+USAGE
+}
+
+# Answer --help and a bare invocation before load_env, which needs a workspace .env.
+[[ $# -eq 0 ]] && { usage >&2; exit 1; }
+if wants_help "--component-id --branch" "$@"; then usage; exit 0; fi
+
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
 require_tools curl jq
@@ -17,13 +44,14 @@ while [[ $# -gt 0 ]]; do
     --component-id) COMPONENT_ID="$2"; shift 2 ;;
     --branch)       BRANCH="$2"; shift 2 ;;
     --current)      CURRENT_ONLY=true; shift ;;
+    -h|--help)      usage; exit 0 ;;
     -*)             echo "Unknown option: $1" >&2; exit 1 ;;
     *)              echo "Unexpected argument: $1" >&2; exit 1 ;;
   esac
 done
 
 if [[ -z "$COMPONENT_ID" ]]; then
-  echo "Usage: bash scripts/boomi-version-history.sh --component-id <ID> [--branch NAME] [--current]" >&2
+  usage >&2
   exit 1
 fi
 
@@ -117,12 +145,23 @@ while [[ -n "$query_token" ]]; do
   query_token=$(echo "$page_results" | jq -r '.queryToken // empty')
 done
 
+# --- Persist the full result set ---
+mkdir -p active-development/inventories
+timestamp=$(date +%Y%m%d_%H%M%S)
+out_file="active-development/inventories/version_history_${timestamp}.json"
+echo "$all_results" | jq '.' > "$out_file"
+
 # --- Display results ---
 result_count=$(echo "$all_results" | jq '.result | length')
 echo "Found ${result_count} version(s) (total: ${total})"
 echo ""
 
 if [[ "$result_count" == "0" ]]; then
+  if $CURRENT_ONLY && [[ -n "$BRANCH" ]]; then
+    echo "No current version on '${BRANCH}'. currentVersion marks the account default branch only —"
+    echo "for this branch's latest, drop --current and take the highest version."
+  fi
+  echo "Raw JSON: ${out_file}"
   log_activity "version-history" "success" "$RESPONSE_CODE" \
     "$(jq -cn --arg id "$COMPONENT_ID" '{component_id: $id, versions: 0}')"
   exit 0
@@ -135,13 +174,19 @@ echo "Component: ${comp_name} (${comp_type})"
 echo ""
 
 # Table header and rows
-printf "%-8s %-20s %-21s %-30s %-8s\n" "VERSION" "BRANCH" "MODIFIED" "MODIFIED_BY" "CURRENT"
+printf "%-8s %-20s %-21s %-30s %-8s\n" "VERSION" "BRANCH" "MODIFIED" "MODIFIED_BY" "CURRENT*"
 printf "%-8s %-20s %-21s %-30s %-8s\n" "-------" "--------------------" "---------------------" "------------------------------" "-------"
 
 echo "$all_results" | jq -r '.result[] | "\(.version)\t\(.branchName // "main")\t\(.modifiedDate)\t\(.modifiedBy)\t\(.currentVersion)"' | \
 while IFS=$'\t' read -r ver branch modified modified_by current; do
   printf "%-8s %-20s %-21s %-30s %-8s\n" "$ver" "$branch" "$modified" "$modified_by" "$current"
 done
+
+echo ""
+echo "* CURRENT marks the account default branch's current version, not the highest version."
+echo "  Every row can be false when the default branch cannot see this component."
+echo ""
+echo "Raw JSON: ${out_file}"
 
 log_activity "version-history" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$comp_name" --arg id "$COMPONENT_ID" --argjson count "$result_count" \

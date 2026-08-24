@@ -9,6 +9,10 @@
 # process component) are managed via boomi-component-push.sh.
 
 set -euo pipefail
+
+# Not safely traceable: extension payloads can carry connector password overrides.
+set +x
+
 source "$(dirname "$0")/boomi-common.sh"
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID BOOMI_ENVIRONMENT_ID

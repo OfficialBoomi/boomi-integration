@@ -5,6 +5,9 @@
 #             create-topic <name>, create-subscription <topic> <name>, list-topics,
 #             query-topic <name>, rest-produce <topic> <payload> [token-name]
 
+# Not safely traceable: graphql() expands a minted JWT; token commands handle raw tokens.
+set +x
+
 source "$(dirname "$0")/boomi-common.sh"
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID BOOMI_ENVIRONMENT_ID

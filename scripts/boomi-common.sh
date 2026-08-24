@@ -8,22 +8,35 @@ set -euo pipefail
 
 load_env() {
   local env_file=".env"
-  if [[ -f "$env_file" ]]; then
-    # No set -a: .env values are read in-shell, never handed to child processes.
-    source "$env_file"
-    _set_user_agent   # .env must not override the header
-  else
+  if [[ ! -f "$env_file" ]]; then
     echo "ERROR: .env file not found in $(pwd)" >&2
     exit 1
   fi
+  # No set -a: .env values are read in-shell, never handed to child processes.
+  # Trace off across the source: every .env value expands here.
+  local _xtrace_enabled=0
+  case $- in *x*) _xtrace_enabled=1 ;; esac
+  set +x
+  source "$env_file"
+  if (( _xtrace_enabled )); then set -x; fi
+  _set_user_agent   # .env must not override the header
+}
+
+# True if the named variable is non-empty. Fences the skill's only ${!name} expansion.
+var_is_set() {
+  local _xtrace_enabled=0
+  case $- in *x*) _xtrace_enabled=1 ;; esac
+  set +x
+  local rc=0
+  [[ -n "${!1:-}" ]] || rc=1
+  if (( _xtrace_enabled )); then set -x; fi
+  return $rc
 }
 
 require_env() {
   local missing=()
   for var in "$@"; do
-    if [[ -z "${!var:-}" ]]; then
-      missing+=("$var")
-    fi
+    var_is_set "$var" || missing+=("$var")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo "ERROR: Missing required environment variables: ${missing[*]}" >&2
@@ -43,6 +56,22 @@ require_tools() {
     echo "ERROR: Missing required tools: ${missing[*]}" >&2
     exit 1
   fi
+}
+
+# --- Argument helpers ---
+
+# True when the args request help. Skips the value of each value-taking option, so
+# a note or name of "-h" is not read as a help request.
+# Args: space-separated value-taking options, then "$@"
+wants_help() {
+  local valued=" $1 " arg skip=false
+  shift
+  for arg in "$@"; do
+    if $skip; then skip=false; continue; fi
+    case "$arg" in -h|--help) return 0 ;; esac
+    case "$valued" in *" $arg "*) skip=true ;; esac
+  done
+  return 1
 }
 
 # --- Version ---
@@ -102,15 +131,24 @@ build_api_url() {
 
 # curl with Boomi auth and common options (low-level — prefer boomi_api for most calls)
 boomi_curl() {
+  # Trace off across the auth assembly: it expands BOOMI_API_TOKEN.
+  local _xtrace_enabled=0
+  case $- in *x*) _xtrace_enabled=1 ;; esac
+  set +x
+
   local ssl_flag=""
   [[ "${BOOMI_VERIFY_SSL:-true}" == "false" ]] && ssl_flag="-k"
 
+  local rc=0
   curl_cfg user "BOOMI_TOKEN.${BOOMI_USERNAME}:${BOOMI_API_TOKEN}" \
     | curl -s $ssl_flag \
         --max-time "${BOOMI_TIMEOUT:-60}" \
         -A "$BOOMI_USER_AGENT" \
         -K - \
-        "$@"
+        "$@" || rc=$?
+
+  if (( _xtrace_enabled )); then set -x; fi
+  return $rc
 }
 
 # High-level API call: captures body and http code cleanly via temp file.
@@ -127,12 +165,20 @@ boomi_api() {
   fi
   local tmpfile="${out_file:-$(mktemp)}"
   RESPONSE_CODE=$(boomi_curl -o "$tmpfile" -w "%{http_code}" "$@")
+
+  # Trace off across the capture: a response body can carry a connector password.
+  local _xtrace_enabled=0
+  case $- in *x*) _xtrace_enabled=1 ;; esac
+  set +x
+
   if [[ -z "$out_file" ]]; then
     RESPONSE_BODY=$(cat "$tmpfile")
     rm -f "$tmpfile"
   else
     RESPONSE_BODY=""
   fi
+
+  if (( _xtrace_enabled )); then set -x; fi
 }
 
 # --- Query pagination ---
@@ -477,7 +523,16 @@ inject_branch_id() {
   fi
 }
 
-# Determine effective branch: --branch flag > XML branchId > BOOMI_DEFAULT_BRANCH_ID > empty (main)
+# Remove the root element's branchId so the request carries no branch identifier.
+strip_branch_id() {
+  echo "$1" | sed \
+    -e 's/\(<[a-zA-Z]*:\{0,1\}Component \)branchId="[^"]*" */\1/' \
+    -e 's/\(<[a-zA-Z]*:\{0,1\}Component [^>]*\) branchId="[^"]*"/\1/'
+}
+
+# Determine effective branch: --branch flag > XML branchId > BOOMI_DEFAULT_BRANCH_ID.
+# Empty means send no branch identifier, which the platform resolves to the
+# account default branch (main unless the account sets another).
 resolve_effective_branch() {
   local flag_branch="$1"
   local xml_branch="$2"
@@ -489,6 +544,92 @@ resolve_effective_branch() {
   elif [[ -n "${BOOMI_DEFAULT_BRANCH_ID:-}" ]]; then
     echo "$BOOMI_DEFAULT_BRANCH_ID"
   fi
+}
+
+# Report the branch a component response carries, warning when it differs from
+# the branch requested.
+# Args: response-xml, expected-branch-id (may be empty), verb phrase completed by
+# "branch: <name>" (e.g. "Create landed on", "Pull read from")
+report_response_branch() {
+  local xml="$1" expected_id="${2:-}" op="${3:-Operation used}"
+  # Root element only.
+  local root
+  root=$(printf '%s' "$xml" | tr '\n' ' ' | grep -o '<[a-zA-Z]*:\{0,1\}Component [^>]*>' | head -1 || true)
+  [[ -z "$root" ]] && return 0
+
+  local actual_id actual_name
+  actual_id=$(printf '%s' "$root" | grep -o 'branchId="[^"]*"' | head -1 | sed 's/.*="//;s/"//' || true)
+  actual_name=$(printf '%s' "$root" | grep -o 'branchName="[^"]*"' | head -1 | sed 's/.*="//;s/"//' || true)
+  [[ -z "$actual_id" && -z "$actual_name" ]] && return 0
+
+  echo "${op} branch: ${actual_name:-$actual_id}"
+
+  if [[ -n "$expected_id" && -n "$actual_id" && "$actual_id" != "$expected_id" ]]; then
+    # resolve_branch_name calls the API, which overwrites the globals the caller still reads.
+    local saved_code="${RESPONSE_CODE:-}" saved_body="${RESPONSE_BODY:-}"
+    local expected_name
+    expected_name=$(resolve_branch_name "$expected_id" 2>/dev/null || true)
+    RESPONSE_CODE="$saved_code"
+    RESPONSE_BODY="$saved_body"
+    echo "WARNING: requested branch ${expected_name:-$expected_id} but the platform used ${actual_name:-$actual_id}." >&2
+    echo "         Confirm which branch holds this component before continuing." >&2
+  fi
+  return 0
+}
+
+# Same, reading the root element from a file rather than a string.
+# Args: file-path, expected-branch-id (may be empty), verb phrase
+report_file_branch() {
+  local file="$1" expected_id="${2:-}" op="${3:-Operation used}"
+  local root
+  root=$(grep -o -m1 '<[a-zA-Z]*:\{0,1\}Component [^>]*>' "$file" 2>/dev/null || true)
+  [[ -z "$root" ]] && return 0
+  report_response_branch "$root" "$expected_id" "$op"
+}
+
+# True when an error body is the invalid-ComponentId response.
+# Args: error-body
+is_invalid_component_error() {
+  case "$1" in
+    *omponentId*"is invalid"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Separate "invisible to this branch" from "no such ID" after an invalid-ComponentId
+# error, via the branch-agnostic metadata query.
+# Args: component-id
+diagnose_invalid_component() {
+  # Callers may hold a tilde-suffixed ID; the metadata query wants the bare one.
+  local component_id="${1%%~*}"
+  [[ -z "$component_id" ]] && return 0
+
+  # Preserve the caller's response globals — the error path still needs them for logging.
+  local saved_code="${RESPONSE_CODE:-}" saved_body="${RESPONSE_BODY:-}"
+
+  local url
+  url="$(build_api_url "ComponentMetadata/query" false)"
+  boomi_api -X POST "$url" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{\"QueryFilter\":{\"expression\":{\"operator\":\"EQUALS\",\"property\":\"componentId\",\"argument\":[\"${component_id}\"]}}}"
+
+  local diag_code="$RESPONSE_CODE" diag_body="$RESPONSE_BODY"
+  RESPONSE_CODE="$saved_code"
+  RESPONSE_BODY="$saved_body"
+
+  [[ "$diag_code" != "200" ]] && return 0
+
+  local branches
+  branches=$(echo "$diag_body" | jq -r '[.result[]?.branchName | select(. != null)] | unique | join(", ")' 2>/dev/null || true)
+
+  if [[ -n "$branches" ]]; then
+    echo "DIAGNOSIS: this component exists on branch(es): ${branches}" >&2
+    echo "           It is not visible to the branch this request addressed. Pass --branch." >&2
+  else
+    echo "DIAGNOSIS: no component with this ID exists on any branch — the ID itself is wrong." >&2
+  fi
+  return 0
 }
 
 # Read branchId from sync state. Empty if not present.
@@ -582,6 +723,11 @@ assert_no_password_token() {
   [[ "$allow" == "true" ]] && return 0
   is_rest_connector_component "$file" || return 0
 
+  # Trace off across the scan: $field_tag holds the pulled secret token.
+  local _xtrace_enabled=0
+  case $- in *x*) _xtrace_enabled=1 ;; esac
+  set +x
+
   # Token shape: exactly 128 lowercase hex in a type="password" field value.
   local ids="" field_tag field_id
   while IFS= read -r field_tag; do
@@ -594,6 +740,8 @@ assert_no_password_token() {
     fi
     ids+=" $field_id"
   done < <(tr '\r\n' '  ' < "$file" | grep -oE '<field[^>]*>' 2>/dev/null || true)
+
+  if (( _xtrace_enabled )); then set -x; fi
   [[ -n "$ids" ]] || return 0
 
   echo "ERROR: refusing to write — REST Client password field(s) hold a pulled secret token:${ids}" >&2

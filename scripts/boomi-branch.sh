@@ -4,6 +4,7 @@
 #
 # Commands:
 #   list                              List all branches
+#   default                           Report the account default branch (read-only probe)
 #   create --name NAME --parent NAME  Create a branch from parent
 #   delete --branch NAME_OR_ID        Delete a branch
 #   merge --source NAME --dest NAME   Create merge request (default strategy: OVERRIDE, priority: SOURCE)
@@ -13,6 +14,38 @@
 #   merge-delete --id ID              Cancel a pending merge request
 
 source "$(dirname "$0")/boomi-common.sh"
+
+usage() {
+  cat <<'USAGE'
+Usage: bash scripts/boomi-branch.sh <command> [options]
+
+Branch commands:
+  list                              List all branches
+  default                           Report the account default branch (read-only;
+                                    works on non-branch-enabled accounts)
+  create --name NAME --parent NAME  Create branch from parent (name or ID)
+  delete --branch NAME_OR_ID        Delete a branch
+
+Merge commands:
+  merge --source NAME --dest NAME   Create merge request
+        [--strategy OVERRIDE|CONFLICT_RESOLVE]
+        [--priority SOURCE|DESTINATION]
+  merge-status --id ID              Check merge request status and details
+  merge-execute --id ID             Execute a pending merge
+  merge-revert --id ID              Revert a completed merge (permanent)
+  merge-delete --id ID              Cancel a pending merge request
+
+Side effects: create/delete/merge write to the platform. list and default are read-only.
+USAGE
+}
+
+# Answer --help and a bare invocation before load_env, which needs a workspace .env.
+[[ $# -eq 0 ]] && { usage >&2; exit 1; }
+if wants_help "--name --parent --branch --strategy --priority --id --source --dest" "$@"; then
+  usage
+  exit 0
+fi
+
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
 require_tools curl jq
@@ -37,6 +70,46 @@ list)
 
   echo "$RESPONSE_BODY" | jq -r '.result[]? | "\(.name)\t\(.id)\t\(.stage)\tparent=\(.parentName // "none")"' | column -t -s $'\t'
   log_activity "branch-list" "success" "$RESPONSE_CODE" '{}'
+  ;;
+
+# --- default ---
+# The Branch object has no default field; currentVersion=true rows name the branch instead.
+# Account-wide, so the result set can span multiple pages — route through paginate_query
+# rather than reading a single page (a single page could miss or misreport the branch).
+default)
+  pages=$(mktemp)
+  trap 'rm -f "$pages"' EXIT
+
+  body='{"QueryFilter":{"expression":{"operator":"and","nestedExpression":[
+          {"operator":"EQUALS","property":"currentVersion","argument":["true"]},
+          {"operator":"EQUALS","property":"deleted","argument":["false"]}
+        ]}}}'
+  if ! paginate_query "ComponentMetadata" "$body" "$pages"; then
+    exit 1
+  fi
+
+  branches=$(jq -rs '[.[][].branchName? | select(. != null)] | unique | join(", ")' "$pages")
+  branch_count=$(jq -rs '[.[][].branchName? | select(. != null)] | unique | length' "$pages")
+
+  if [[ -z "$branches" ]]; then
+    echo "Could not determine the account default branch: no component reports a current version." >&2
+    echo "This happens on an empty account, or when the default is a branch that can see no components." >&2
+    exit 1
+  fi
+
+  if [[ "$branch_count" != "1" ]]; then
+    echo "Could not determine the account default branch: current versions report ${branch_count} branches (${branches})." >&2
+    echo "Expected exactly one. Read the branch each operation resolved to from its own output instead." >&2
+    exit 1
+  fi
+
+  echo "Account default branch: ${branches}"
+  echo ""
+  echo "Operations that name no branch resolve here. Pass --branch main to target main."
+  echo "The setting is changed in the UI only (Branch Management)."
+
+  log_activity "branch-default" "success" "$RESPONSE_CODE" \
+    "$(jq -cn --arg b "$branches" '{default_branch: $b}')"
   ;;
 
 # --- create ---
@@ -294,26 +367,11 @@ merge-delete)
     "$(jq -cn --arg id "$MERGE_ID" '{merge_id: $id}')"
   ;;
 
-# --- help ---
+# --- unknown command ---
 *)
-  cat <<'USAGE'
-Usage: bash scripts/boomi-branch.sh <command> [options]
-
-Branch commands:
-  list                              List all branches
-  create --name NAME --parent NAME  Create branch from parent (name or ID)
-  delete --branch NAME_OR_ID        Delete a branch
-
-Merge commands:
-  merge --source NAME --dest NAME   Create merge request
-        [--strategy OVERRIDE|CONFLICT_RESOLVE]
-        [--priority SOURCE|DESTINATION]
-  merge-status --id ID              Check merge request status and details
-  merge-execute --id ID             Execute a pending merge
-  merge-revert --id ID              Revert a completed merge (permanent)
-  merge-delete --id ID              Cancel a pending merge request
-USAGE
-  [[ -z "$COMMAND" ]] && exit 0 || exit 1
+  echo "Unknown command: ${COMMAND}" >&2
+  usage >&2
+  exit 1
   ;;
 
 esac

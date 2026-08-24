@@ -219,7 +219,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
     ├── boomi-component-search.sh # Query components by folder (flat or --recursive)/name/type/reference; writes JSON to active-development/inventories/
     ├── boomi-extensions.sh      # Get/set environment extension values via EnvironmentExtensions API; auto-snapshots current state before every write
     ├── event-streams-setup.sh   # Create Event Streams topics and subscriptions
-    └── boomi-branch.sh         # Branch and merge operations (list, create, delete, merge, status)
+    └── boomi-branch.sh         # Branch and merge operations (default, list, create, delete, merge, status)
 ```
 
 **User Project Workspace** (separate for each project):
@@ -311,13 +311,15 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
     - Required: `folder_name` (positional)
     - Optional: `--parent-folder-id`, `--test-connection`
 
+**Every `--branch` flag below defaults to the account default branch, not main** — an account-wide setting, main unless the account sets otherwise. Pass `--branch main` to force main; `boomi-branch.sh default` reports the setting. Create and push always print the branch the platform used; an unqualified pull prints the branch it read from. See `references/guides/branch_merge_api_behavior.md` § Account Default Branch.
+
 - `boomi-component-create.sh` - Create new component on platform (generates component ID)
     - Required: `file_path` (positional)
     - Optional: `--branch`, `--test-connection`
 
 - `boomi-component-push.sh` - Update existing component on platform
     - Required: `file_path` (positional)
-    - Optional: `--branch`, `--test-connection`, `--force` (bypass content hash check — needed for rollback pushes)
+    - Optional: `--branch`, `--account-default` (push unqualified on purpose), `--test-connection`, `--force` (bypass content hash check — needed for rollback pushes)
 
 - `boomi-component-pull.sh` - Download component from platform to local
     - Required: `--component-id`
@@ -326,22 +328,25 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 - `boomi-deploy.sh` - Deploy process to runtime environment
     - Required: `file_path` (positional)
     - Optional: `--deployment-notes`, `--list-environments`
-    - Auto-detects branch from XML/sync state and warns before deploying branch components
+    - Auto-detects branch from the XML's `branchId`, then sync state. Deploying from a branch needs no merge to main.
+    - Replaces any existing deployment of this process in the target environment — on every branch, main included. Consult the user first when a redeploy is not clearly intended.
 
 - `boomi-version-history.sh` - List component version history via ComponentMetadata/query
     - Required: `--component-id`
-    - Optional: `--branch` (filter by branch name), `--current` (show only current version)
+    - Optional: `--branch` (filter by branch name), `--current` (current version on the account default branch only)
+    - Also writes the unmodified response to `active-development/inventories/version_history_<timestamp>.json`; the printed table omits `branchId`
 
 - `boomi-component-diff.sh` - Compare two versions of a component via ComponentDiffRequest
     - Required: `--component-id`, `--source <N>`, `--target <N>`
 
-- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries.
+- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries — which scopes results to the account default branch.
     - 0 components in a folder usually means they sit in subfolders — retry with `--recursive` before reporting the folder empty.
 
 - `boomi-folder-list.sh` - List folders as `id<TAB>fullPath`, plus `active-development/inventories/folder_list_<timestamp>.json`
     - No args lists top-level folders; `--folder <id|name|%pattern%|path>` lists its children, `--recursive` its whole subtree
 
-- `boomi-branch.sh` - Branch and merge operations (only for Branch & Merge enabled accounts)
+- `boomi-branch.sh` - Branch and merge operations (merge subcommands only for Branch & Merge enabled accounts)
+    - `default` — report the account default branch (read-only). Runs on any account; it queries component metadata, not the Branch endpoints.
     - `list` — list all branches
     - `create --name NAME --parent NAME` — create branch from parent
     - `delete --branch NAME_OR_ID` — delete a branch

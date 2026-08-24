@@ -46,6 +46,11 @@ boomi_api -X POST "$url" \
   -H "Content-Type: application/json" \
   -d "$request_json"
 
+# Trace off across response handling: a diff reports changed values verbatim.
+_xtrace_enabled=0
+case $- in *x*) _xtrace_enabled=1 ;; esac
+set +x
+
 if [[ "$RESPONSE_CODE" != "200" ]]; then
   log_activity "component-diff" "fail" "$RESPONSE_CODE" \
     "$(jq -cn --arg id "$COMPONENT_ID" --arg src "$SOURCE_VERSION" --arg tgt "$TARGET_VERSION" --arg err "${RESPONSE_BODY:0:500}" \
@@ -56,6 +61,8 @@ fi
 
 # --- Output raw JSON response ---
 echo "$RESPONSE_BODY" | jq .
+
+if (( _xtrace_enabled )); then set -x; fi
 
 log_activity "component-diff" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg id "$COMPONENT_ID" --arg src "$SOURCE_VERSION" --arg tgt "$TARGET_VERSION" \

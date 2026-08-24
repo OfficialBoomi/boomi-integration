@@ -10,7 +10,7 @@ load_env
 echo "=== .env Variable Status ==="
 grep -v '^\s*#' .env | grep -v '^\s*$' | while IFS='=' read -r name _rest; do
   name=$(echo "$name" | xargs)  # trim whitespace
-  if [[ -n "${!name:-}" ]]; then
+  if var_is_set "$name"; then
     echo "  $name=SET"
   else
     echo "  $name=UNSET"

@@ -15,6 +15,9 @@
 #
 # Usage: bash scripts/boomi-wss-test.sh --path /ws/simple/createOrder [--method POST] [--data '{"key":"val"}' | --data file.json] [--content-type application/xml]
 
+# Not safely traceable: auth resolution expands SERVER_TOKEN and SERVER_BEARER_TOKEN.
+set +x
+
 source "$(dirname "$0")/boomi-common.sh"
 load_env
 require_tools curl

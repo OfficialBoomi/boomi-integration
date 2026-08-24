@@ -3,6 +3,32 @@
 # Usage: bash scripts/boomi-component-pull.sh --component-id <ID> [--branch NAME_OR_ID] [--target-path PATH]
 
 source "$(dirname "$0")/boomi-common.sh"
+
+usage() {
+  cat <<'USAGE'
+Usage: bash scripts/boomi-component-pull.sh --component-id <ID> [options]
+
+Downloads a component from the platform into the workspace and records sync state.
+
+Required:
+  --component-id <ID>    Component ID (a tilde branch suffix is stripped)
+
+Options:
+  --branch <name|id>     Source branch. Defaults to BOOMI_DEFAULT_BRANCH_ID, then
+                         the account default branch (main unless the account sets
+                         another). The saved XML's branchId is aligned to it.
+  --version <N>          Pull a specific historical version, saved as <Name>_v<N>.xml
+  --target-path <path>   Override the destination path
+
+Side effects: writes under active-development/ and updates sync state.
+On "ComponentId is invalid", queries ComponentMetadata and prints a DIAGNOSIS line.
+USAGE
+}
+
+# Answer --help and a bare invocation before load_env, which needs a workspace .env.
+[[ $# -eq 0 ]] && { usage >&2; exit 1; }
+if wants_help "--component-id --branch --version --target-path" "$@"; then usage; exit 0; fi
+
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID
 require_tools curl jq
@@ -19,13 +45,14 @@ while [[ $# -gt 0 ]]; do
     --target-path)  TARGET_PATH="$2"; shift 2 ;;
     --branch)       BRANCH="$2"; shift 2 ;;
     --version)      VERSION="$2"; shift 2 ;;
+    -h|--help)      usage; exit 0 ;;
     -*)             echo "Unknown option: $1" >&2; exit 1 ;;
     *)              echo "Unexpected argument: $1" >&2; exit 1 ;;
   esac
 done
 
 if [[ -z "$COMPONENT_ID" ]]; then
-  echo "Usage: bash scripts/boomi-component-pull.sh --component-id <ID> [--branch NAME_OR_ID] [--version N] [--target-path PATH]" >&2
+  usage >&2
   exit 1
 fi
 
@@ -46,7 +73,7 @@ elif [[ -n "$BRANCH_ID" ]]; then
   echo "Fetching component ${COMPONENT_ID} from branch ${BRANCH:-$BRANCH_ID}"
 else
   url="$(build_api_url "Component/${COMPONENT_ID}")"
-  echo "Fetching component ${COMPONENT_ID} from main"
+  echo "Fetching component ${COMPONENT_ID} from the account default branch"
 fi
 
 tmpfile=$(mktemp)
@@ -58,7 +85,15 @@ if [[ "$RESPONSE_CODE" != "200" ]]; then
     "$(jq -cn --arg id "$COMPONENT_ID" --arg err "$(head -c 500 "$tmpfile")" \
        '{component_id: $id, error: $err}')"
   echo "ERROR: Failed to get component (HTTP ${RESPONSE_CODE}): $(head -c 500 "$tmpfile")" >&2
+  if is_invalid_component_error "$(head -c 500 "$tmpfile")"; then
+    diagnose_invalid_component "$COMPONENT_ID"
+  fi
   exit 1
+fi
+
+# An unqualified fetch served the account default branch — report which one it was.
+if [[ -z "$BRANCH_ID" && -z "$VERSION" ]]; then
+  report_file_branch "$tmpfile" "" "Pull read from"
 fi
 
 # --- Extract name and type (awk exits after first match — safe on single-line XML) ---
@@ -102,7 +137,7 @@ mv "$tmpfile" "$file_path"
 
 # Align branchId in local file with the requested branch.
 # Inherited components (not yet modified on branch) return main's branchId from the API.
-# Without this, a push without --branch would silently target main instead of the branch.
+# Without this, a push without --branch would target the account default branch instead.
 if [[ -n "$BRANCH_ID" ]]; then
   local_xml=$(cat "$file_path")
   inject_branch_id "$local_xml" "$BRANCH_ID" > "$file_path"
@@ -118,6 +153,6 @@ write_sync_state "$COMPONENT_ID" "$file_path" "$content_hash" "$BRANCH_ID"
 
 log_activity "component-pull" "success" "$RESPONSE_CODE" \
   "$(jq -cn --arg name "$component_name" --arg id "$COMPONENT_ID" \
-     --arg file "$file_path" --arg type "$component_type" --arg branch "${BRANCH_ID:-main}" \
+     --arg file "$file_path" --arg type "$component_type" --arg branch "${BRANCH_ID:-account-default}" \
      '{component_name: $name, component_id: $id, file_path: $file, component_type: $type, branch: $branch}')"
 echo "SUCCESS: Component saved to ${file_path}"

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Search Boomi components by folder, name, type, or reference relationship.
 # Results are written to active-development/inventories/component_search_<timestamp>.json.
-# Default filters include currentVersion=true and deleted=false.
+# Default filters include currentVersion=true and deleted=false. currentVersion
+# tracks the account default branch, so results are scoped to that branch
+# (main unless the account sets another).
 # Folder scoping is flat unless --recursive is passed.
 #
 # Usage:

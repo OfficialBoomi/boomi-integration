@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.50
+
+- Suppress credential values in shell trace output (xtrace)
+
+
+## 1.0.49
+
+- Component and deploy operations honor the account default branch when no branch is given
+- Create and push report the branch the platform actually used, and warn on a mismatch
+- New `boomi-branch.sh default` reports the account default branch, read-only
+- `boomi-branch.sh`, `boomi-component-pull.sh`, `boomi-deploy.sh`, and `boomi-version-history.sh` answer `--help` without a workspace `.env`
+- `ComponentId is invalid` now self-diagnoses on pull and push
+- `boomi-version-history.sh` writes the full result set to `active-development/inventories/`
+- New `boomi-component-push.sh --account-default` for an intentional unqualified push
+- Push no longer short-circuits a branch retarget as unchanged content
+- Deploy notes on every deploy that it replaces an existing deployment of the process
+- Document the account default branch, and scope `currentVersion` to the surface it applies to
+
+
 ## 1.0.48
 
 - Document when map tagLists are required

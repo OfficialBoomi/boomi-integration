@@ -11,6 +11,9 @@
 # Usage: bash scripts/boomi-shared-server-info.sh [<atom-id>]
 #   Defaults to $BOOMI_TEST_ATOM_ID when <atom-id> is omitted.
 
+# Not safely traceable: every line printed expands a body carrying authToken.
+set +x
+
 source "$(dirname "$0")/boomi-common.sh"
 load_env
 require_env BOOMI_API_URL BOOMI_USERNAME BOOMI_API_TOKEN BOOMI_ACCOUNT_ID

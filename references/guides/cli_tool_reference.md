@@ -23,7 +23,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-component-pull.sh**: Download components from platform to local
 - **boomi-component-diff.sh**: Compare two versions of a component (structured JSON diff)
 - **boomi-version-history.sh**: List component version history
-- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false`.
+- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
 - **boomi-folder-list.sh**: List a folder's child folders (or its whole subtree with `--recursive`) as `id<TAB>fullPath`, also written to `active-development/inventories/folder_list_<timestamp>.json`.
 
 **Deployment & Testing**:
@@ -160,19 +160,22 @@ bash <skill-path>/scripts/boomi-branch.sh merge --source feature-x --dest <targe
 bash <skill-path>/scripts/boomi-branch.sh merge-status --id <mergeRequestId>   # poll until stage=REVIEWING
 bash <skill-path>/scripts/boomi-branch.sh merge-execute --id <mergeRequestId>  # execute the merge
 
-# Deploy warns automatically if component is from a non-main branch
+# Deploy from a branch directly — no merge to main needed
 bash <skill-path>/scripts/boomi-deploy.sh active-development/process/my-process.xml
 ```
 
-**Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > main.
+**Branch resolution priority for component tools:** `--branch` flag > `branchId` already in XML > `BOOMI_DEFAULT_BRANCH_ID` env var > the *account default branch* (main unless the account sets another). Pass `--branch main` to target main from an account whose default is elsewhere.
 
-**Safety:** Push aborts if sync state records a branch but the XML has no `branchId` (prevents accidental writes to main). Deploy warns when deploying from a non-main branch. All operations echo the target branch.
+**Safety:** Push aborts if sync state records a branch but the XML has no `branchId` — pass `--branch`, or `--account-default` to push unqualified on purpose. Deploy replaces any existing deployment of the process in the target environment, on every branch including main. On `ComponentId is invalid`, pull and push automatically query `ComponentMetadata` and print a `DIAGNOSIS:` line naming the branches that hold the component, because the platform's response is identical to a nonexistent ID.
+
+**Reading the account default branch:** `boomi-branch.sh default` — read-only.
 
 See `references/guides/branch_merge_guide.md` for full Branch & Merge API reference.
 
 **Version Management Workflows**:
 ```bash
-# List all versions of a component
+# List all versions of a component (rows from every branch)
+# Also writes the full result set to active-development/inventories/version_history_<ts>.json
 bash <skill-path>/scripts/boomi-version-history.sh --component-id <guid>
 
 # Pull a specific historical version (saves as MyProcess_v2.xml)
@@ -184,7 +187,7 @@ bash <skill-path>/scripts/boomi-component-diff.sh --component-id <guid> --source
 
 See `references/guides/version_management_guide.md` for full version management reference.
 
-**Push short-circuit:** `boomi-component-push.sh` compares the local file's hash against the hash recorded in local sync state, not against the platform. If the component changed in the GUI but the local file did not, the push reports `matches the last push — nothing sent to the platform` and sends nothing, so GUI-side drift is invisible to it. Use `--force` to overwrite platform state from the local file.
+**Push short-circuit:** `boomi-component-push.sh` compares the local file's hash against the hash recorded in local sync state, not against the platform. If the component changed in the GUI but the local file did not, the push reports `matches the last push — nothing sent to the platform` and sends nothing, so GUI-side drift is invisible to it. Use `--force` to overwrite platform state from the local file. The target branch is part of the comparison, so a push that retargets the branch (`--branch`, `--account-default`) still goes out on byte-identical content.
 
 **Diff blind spot:** `boomi-component-diff.sh` does not report dragpoint `x`/`y` changes — the platform's diff omits cosmetic coordinates. A GUI save that regenerates dragpoint coordinates shows up as a diff of only the label attributes it also changed. To detect that kind of drift, pull both versions and compare the XML directly.
 

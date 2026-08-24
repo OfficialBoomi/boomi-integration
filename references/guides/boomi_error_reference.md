@@ -62,6 +62,8 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Profile-keyed extraction empty after a Split Documents step | #34 (Split Preserves Wrapper) |
 | Every document lands on a Route step's Default path after a split | #34 (Split Preserves Wrapper) |
 | "No data produced from map" after a split | #34 (Split Preserves Wrapper) |
+| "ComponentId is invalid" on a component that exists | #35 (Account Default Branch) |
+| Push reports a new version but main never changes | #35 (Account Default Branch) |
 
 ---
 
@@ -103,6 +105,7 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 32 | Agent Step Errors Return In-Band | High | Silent - COMPLETE on failure, Try/Catch never fires |
 | 33 | Disk V2 Directory Outside `work/` on Cloud Runtimes | High | Runtime error - FilePermission denial, clean push and deploy |
 | 34 | Split Documents Preserves Parent Wrapper | High | Silent in Set Properties/Route - ERROR in Map |
+| 35 | Account Default Branch Redirects Unqualified Operations | Low | Silent in the API - writes land on the default branch, main unchanged |
 
 ---
 
@@ -1966,5 +1969,34 @@ A Split Documents step reduces the array or repeating element to one occurrence 
 ### The Rule
 
 Downstream of a split, reuse the same profile and nested element keys as upstream of it. See `references/steps/data_process_step.md` § Output Document Shape.
+
+---
+
+## Issue #35: Account Default Branch Redirects Unqualified Operations
+
+**Frequency:** Low overall, but affects every operation in an account where it is set
+**Detection:** Silent by default — a write intended for main lands elsewhere and reports success
+
+### The Problem
+
+A request that names no branch resolves to the account's default branch. The setting is account-wide, so it reaches developers who never work on branches themselves, and it persists until someone changes it back in the UI. Requires branch & merge enabled; where those endpoints are denied every operation is on main (see `branch_merge_api_behavior.md` § Non-Branch-Enabled Account Behavior).
+
+### Detection
+
+- A push reports a new version, but main's version did not change.
+- A component readable on main reports `ComponentId is invalid` on push.
+- `bash <skill-path>/scripts/boomi-branch.sh default` reports the current setting (read-only).
+
+Create and push print the branch the platform used — `Create landed on branch:`, `Push landed on branch:` — and warn when it differs from the branch requested. A pull prints `Pull read from branch:` only when it named no branch; a `--branch` pull suppresses it, because an inherited component returns the parent's `branchId` and the report would be misleading. Compare what is printed against the branch you intended.
+
+### Resolution
+
+Pass `--branch main` for operations that must target main. The default is set in the UI only (Branch Management) — ask the user to change it there when the reported branch disagrees with intent.
+
+`ComponentId is invalid` does not distinguish "invisible to the addressed branch" from "no such ID". Pull and push diagnose it automatically and print a `DIAGNOSIS:` line; for any other component, `boomi-version-history.sh --component-id <id>` spans every branch, so the BRANCH column names the branches that can see it and zero rows mean the ID is wrong.
+
+### Related
+
+- `references/guides/branch_merge_api_behavior.md` § Account Default Branch — per-endpoint behavior and the `currentVersion` surface split
 
 ---
