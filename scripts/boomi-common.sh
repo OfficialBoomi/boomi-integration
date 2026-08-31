@@ -7,7 +7,8 @@ set -euo pipefail
 # --- Environment ---
 
 load_env() {
-  local env_file=".env"
+  # Leading ./ is required: source searches $PATH for a name containing no slash.
+  local env_file="./.env"
   if [[ ! -f "$env_file" ]]; then
     echo "ERROR: .env file not found in $(pwd)" >&2
     exit 1

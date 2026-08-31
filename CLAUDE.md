@@ -14,10 +14,11 @@ The boomi-integration skill — a framework for AI coding agents to build Boomi 
 
 ## Credential handling
 
-Credentials must not reach the command line, a child process environment, or a shell trace. Six guardrails enforce that:
+Credentials must not reach the command line, a child process environment, or a shell trace. Seven guardrails enforce that:
 
 - **Auth reaches curl in a config file on stdin** (`-K -`). Stdin is therefore reserved in `boomi_curl` and `boomi_api` — never `@-`, `-T -`, or piping into them (inline `-d` and `--data-binary @file` are fine).
 - **`load_env` does not export `.env` values.** Do not re-add `set -a`, however idiomatic it looks for sourcing a `.env`.
+- **`load_env` sources `./.env`, never `.env`.** Do not drop the `./`, however redundant it looks: `source` searches `$PATH` before the current directory for any name containing no slash, so a bare `.env` loads one planted on `$PATH` instead of the workspace's.
 - **`var_is_set` is the only place that expands a variable by name.** `${!name}` puts the value into a traced command, so the xtrace fence lives in that one helper; `require_env` and `boomi-env-check.sh` call it. Anything new needing a by-name lookup must go through it rather than adding another guard.
 - **Four scripts disable xtrace for the whole file**, each handling credential material outside the library's per-call fence: `event-streams-setup.sh` (minted JWT, raw tokens), `boomi-wss-test.sh` (assembled auth config), `boomi-extensions.sh` (payloads carrying connector password overrides), `boomi-shared-server-info.sh` (`authToken` in the response). Heredoc and here-string content is not traced, so request bodies built that way are safe either way.
 - **Response bodies are fenced at capture and at use.** `boomi_api` fences the `RESPONSE_BODY` capture; the fence restores on return, so a caller that expands `RESPONSE_BODY` fences its own use — `boomi-component-create.sh`, `boomi-component-push.sh`, and `boomi-component-diff.sh` do. A submitted connector password comes back in some 4xx bodies, and a diff reports changed values verbatim. Check a new endpoint's response for credential material before expanding `RESPONSE_BODY` from it.

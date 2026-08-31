@@ -129,7 +129,7 @@ When `persisted` is `true`, the property's value at the end of an execution carr
 | Environment extensions | `processProperties` section in Extensions API | `properties` section in Extensions API |
 | Naming | Label + unique key per property | Freeform name (e.g., `DPP_BATCH_ID`) |
 | Reusability | Same component referenced by multiple processes | Defined per-process |
-| Scripting access | `ExecutionUtil.getProcessProperty(componentId, key)` | `ExecutionUtil.getDynamicProcessProperty(name)` |
+| Scripting access | `ExecutionUtil.getProcessProperty(componentId, key)` — needs a separate structured reference to package the component, see Referencing in Groovy Scripts | `ExecutionUtil.getDynamicProcessProperty(name)` |
 
 Both types are available throughout the entire process execution, including across subprocess calls via Process Call steps.
 
@@ -176,7 +176,30 @@ The **Get Process Property** (`DefinedProcessPropertyGet`) and **Set Process Pro
 
 ## Referencing in Groovy Scripts
 
-Access Process Property component values in Data Process (Groovy) steps or map scripting functions:
+**A component GUID inside a script body creates no dependency edge.** A GUID written as a string literal in Groovy is opaque text to the platform's reference analysis, so the Process Property component is not packaged with the process at deploy time. Push and deploy both succeed; execution then fails:
+
+```
+Error executing data process; Caused by: Component does not exist:
+{PROCESS_PROPERTY_COMPONENT_ID} (in groovy2 script)
+```
+
+`ExecutionUtil.getProcessProperty` resolves the component out of the deployed package, so the component must be pulled into that package by a **structured** reference elsewhere in the same process. See Issue #40 in `../guides/boomi_error_reference.md`.
+
+### Preferred pattern — read once in a Set Properties step
+
+Read the defined property into a DPP with a Set Properties step, then have scripts read the DPP. The `definedparameter` source value is a structured reference, so it creates the dependency edge and packages the component — see Referencing in Set Properties above for the syntax, writing to `propertyId="process.DPP_TARGET_URL"`.
+
+```groovy
+import com.boomi.execution.ExecutionUtil;
+
+String targetUrl = ExecutionUtil.getDynamicProcessProperty("DPP_TARGET_URL");
+```
+
+One shape carries every property read, and no GUID appears in the script at all.
+
+### When the script must call getProcessProperty directly
+
+Writing back with `setProcessProperty`, or reading a property whose key the script picks at execution time, still needs the direct call. The dependency edge remains the caller's responsibility — a Set Properties step reading any one property from that component is enough to package it:
 
 ```groovy
 import com.boomi.execution.ExecutionUtil;
@@ -191,6 +214,14 @@ ExecutionUtil.setProcessProperty(
 ```
 
 The component ID must be the full GUID. The property key is the `key` attribute from the `definedProcessProperty` element.
+
+Confirm the edge exists before deploying:
+
+```
+bash <skill-path>/scripts/boomi-component-search.sh --related-to {PROCESS_COMPONENT_ID}
+```
+
+`Found 0 reference(s)` means the process will deploy clean and fail at execution. Otherwise the Process Property component appears in the output file's `references` records with `type: DEPENDENT`.
 
 ## Environment Extensions
 

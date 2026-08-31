@@ -215,7 +215,7 @@ When source or target profiles use instance identifiers and qualifiers (tagLists
 | Repeating | Non-repeating | N split documents, non-repeating fields duplicated across all | Not needed — set the target to `maxOccurs="-1"` |
 | N non-repeating fields | The same repeating element | 1 occurrence, last-write-wins | Required |
 
-A JSON array mapped to an XML element with `maxOccurs="-1"` needs only that `maxOccurs` on the target profile's element. The map itself is one `Mapping` per leaf field with no `fromTagListKey`/`toTagListKey`, and the profile's `<tagLists>` block stays empty. The engine carries the occurrence count from the data. Zero source occurrences emit no target element at all — an empty array and an absent property produce identical output.
+A JSON array mapped to an XML element with `maxOccurs="-1"` needs only that `maxOccurs` on the target profile's element. The map itself is one `Mapping` per leaf field with no `fromTagListKey`/`toTagListKey`, and the profile's `<tagLists>` block stays empty. The engine carries the occurrence count from the data. Zero source occurrences emit no target element at all — an empty array and an absent property produce identical output. When no mapping in the map is satisfied, the result is not an empty document but zero documents and a map error — see Issue #41 in `references/guides/boomi_error_reference.md`.
 
 Fan-in has no data-borne occurrence count, so both mappings write to the same instance and the earlier value is discarded silently: accepted on push, deploys, and executes with status COMPLETE. `toTagListKey` supplies what is missing by naming which instance each mapping writes to.
 
@@ -267,6 +267,8 @@ When using `toTagListKey`, Boomi automatically populates qualifier elements in t
 - This works for compound qualifiers — every TagExpression in the GroupingExpression contributes
 - Explicit mappings to qualifier fields override auto-population
 - Without `toTagListKey`, multiple mappings from non-repeating source fields to the same repeating element collapse into a single instance (last-write-wins). This is the fan-in case only — a repeating source iterating into a repeating target does not need `toTagListKey`
+
+**Auto-population fills an instance; it does not create one.** The mapped source element's existence is what opens the instance — presence, not value. A present-but-empty source therefore opens an instance, writes nothing into it, and the qualifier auto-populates alone: `<ODSREQUEST><USERDATA>0528</USERDATA></ODSREQUEST>`, no payload, no error, execution COMPLETE. An absent source element opens no instance and no qualifier is written. With no qualifier on the target, that same present-but-empty source emits no element at all — an instance with nothing written into it is dropped. The rule is about the map having no value to write, not about how the value went missing: a direct mapping of `""`, a String function whose result is empty, and a Simple Lookup miss are indistinguishable in the output.
 
 ### keyPath Pattern
 

@@ -39,6 +39,12 @@ fi
 
 # --- Download logs for a specific execution ---
 if [[ -n "$EXECUTION_ID" && "$FETCH_LOGS" == "true" ]]; then
+  # Pre-flight: logs arrive as a zip archive.
+  if ! command -v unzip &>/dev/null; then
+    echo "ERROR: --logs requires 'unzip' to extract the log archive, and it was not found." >&2
+    exit 1
+  fi
+
   log_url="$(build_api_url "ProcessLog" false)"
   log_xml="<ProcessLog xmlns=\"http://api.platform.boomi.com/\" executionId=\"${EXECUTION_ID}\" logLevel=\"ALL\"/>"
 
@@ -72,27 +78,69 @@ if [[ -n "$EXECUTION_ID" && "$FETCH_LOGS" == "true" ]]; then
   echo "Downloading log archive..."
   local_zip=$(mktemp)
   log_content=""
+  archive_listing=""
+  archive_bytes=""
+  archive_head=""
+  log_file=""
+  dl_code=""
+  # Distinguishes "extracted a log that happens to be empty" from "never got a log".
+  extract_status="not_ready"
 
   for (( k=1; k<=24; k++ )); do
     boomi_api --out-file "$local_zip" -X GET "$download_url" --max-time 120
     dl_code="$RESPONSE_CODE"
 
     if [[ "$dl_code" == "200" ]]; then
-      if command -v unzip &>/dev/null; then
-        log_file=$(unzip -l "$local_zip" 2>/dev/null | sed -n 's/.*[[:space:]]\([^ ]*\.log\)$/\1/p' | head -1)
-        [[ -n "$log_file" ]] && log_content=$(unzip -p "$local_zip" "$log_file" 2>/dev/null || echo "")
+      if archive_listing=$(unzip -l "$local_zip" 2>/dev/null); then
+        log_file=$(printf '%s\n' "$archive_listing" | sed -n 's/.*[[:space:]]\([^ ]*\.log\)$/\1/p' | head -1 || true)
+        if [[ -z "$log_file" ]]; then
+          extract_status="no_log_in_archive"
+        elif log_content=$(unzip -p "$local_zip" "$log_file" 2>/dev/null); then
+          extract_status="extracted"
+        else
+          extract_status="extract_failed"
+        fi
+      else
+        extract_status="unreadable_archive"
+        archive_bytes=$(wc -c < "$local_zip" | tr -d ' ')
+        archive_head=$(head -c 120 "$local_zip" | tr -dc '[:print:]' || true)
       fi
       break
     elif [[ "$dl_code" == "202" || "$dl_code" == "204" ]]; then
       echo "  Log file not ready, waiting... (${k}/24)"
       sleep 5
     else
-      echo "  Log download failed (HTTP ${dl_code})"
+      extract_status="download_failed"
       break
     fi
   done
 
   rm -f "$local_zip"
+
+  if [[ "$extract_status" != "extracted" ]]; then
+    case "$extract_status" in
+      no_log_in_archive)
+        echo "ERROR: Log archive downloaded but contains no .log file — nothing to report." >&2
+        echo "  Archive contents:" >&2
+        printf '%s\n' "$archive_listing" | sed 's/^/    /' >&2
+        ;;
+      extract_failed)
+        echo "ERROR: Log archive downloaded but its .log entry could not be extracted: ${log_file}" >&2
+        ;;
+      unreadable_archive)
+        echo "ERROR: Log archive downloaded but could not be read as a zip, or held no entries." >&2
+        echo "  Received ${archive_bytes} bytes, starting: ${archive_head}" >&2
+        ;;
+      download_failed)
+        echo "ERROR: Log download failed (HTTP ${dl_code})." >&2
+        ;;
+      *)
+        echo "ERROR: Log file still not ready after 24 attempts (last HTTP ${dl_code})." >&2
+        ;;
+    esac
+    echo "No result file written. This is a log-retrieval failure, not an empty execution log." >&2
+    exit 1
+  fi
 
   # Save result
   feedback_dir="active-development/feedback/execution-results"
@@ -110,7 +158,11 @@ if [[ -n "$EXECUTION_ID" && "$FETCH_LOGS" == "true" ]]; then
 EOF
 
   echo "SUCCESS: Logs saved to ${result_file}"
-  [[ -n "$log_content" ]] && echo "$log_content"
+  if [[ -n "$log_content" ]]; then
+    echo "$log_content"
+  else
+    echo "NOTE: Log extracted successfully and is empty — this execution produced no log entries."
+  fi
   exit 0
 fi
 

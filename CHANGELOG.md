@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.0.57
+
+- Document what causes a repeating target element to be created in a map
+- Document flat-file record emission versus repeating XML elements
+- Add error reference issue for a map with no satisfied mapping emitting zero documents
+
+
+## 1.0.56
+
+- Read Process Property components through a Set Properties `definedparameter`, not a GUID in a script body
+
+
+## 1.0.55
+
+- Fail honestly when `boomi-execution-query.sh --logs` cannot retrieve a log, instead of reporting SUCCESS with an empty log
+- Report which required CLI tools are installed in `boomi-env-check.sh`
+
+
+## 1.0.54
+
+- Resolve the workspace `.env` explicitly rather than via `$PATH`
+
+
+## 1.0.53
+
+- Model XML profile attributes with a nested `<XMLAttribute>`, not `<XMLElement isNode="false">`
+
+
+## 1.0.52
+
+- Add Boomi Data Hub connector operation reference
+
+
+## 1.0.51
+
+- Documented the custom SDK connector operation component
+
+
 ## 1.0.50
 
 - Suppress credential values in shell trace output (xtrace)

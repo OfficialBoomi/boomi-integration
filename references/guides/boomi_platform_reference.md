@@ -44,11 +44,11 @@ Boomi offers three API management solutions addressing different needs:
 **When to suggest**: High-volume API traffic requirements, advanced security needs.
 **User action**: See Boomi documentation for configuration details.
 
-### DataHub (Master Data Management)
+### Data Hub (Master Data Management)
 **What it does**: Cloud-based MDM hub providing golden record management, data quality, and synchronization across systems.  
 **When to suggest**: Master data consolidation, duplicate resolution, data quality rules, golden record requirements.  
-**Integration touchpoint**: Boomi MDM connector steps available, or REST API calls to DataHub platform API.  
-**User action**: Define entities and repositories in DataHub GUI, configure match/merge rules.
+**Integration touchpoint**: Boomi Data Hub connector steps available (see `references/components/datahub_connector_operation_component.md`), or REST API calls to the Data Hub repository API.  
+**User action**: Model design, source configuration, deployment, and quarantine triage are the `boomi-datahub` skill's scope — including bootstrapping either connection an integration process needs (`datahub-connection.sh bootstrap rest|connector`).
 
 ### Flow (Low-Code Application Platform)
 **What it does**: Build stateful applications and workflows with drag-drop UI components.  

@@ -22,7 +22,7 @@ Custom Connector Connection components store configuration for connectors built 
                componentId=""
                name="{connection-name}"
                type="connector-settings"
-               subType="{connectorGroupID}-{classification}"
+               subType="{classificationType}"
                folderId="{folder-id}">
   <bns:encryptedValues/>
   <bns:object>
@@ -40,27 +40,24 @@ Custom Connector Connection components store configuration for connectors built 
 
 ## Finding the Connector Type Identifier
 
-The `subType` attribute uses the format: `{connectorGroupID}-{classification}`
+The `subType` attribute is the connector's **`classificationType`** — the identifier the Connectors API assigns when the connector group is created. The connector's name is slugified and may be truncated, so **it cannot be reliably hand-constructed. Read it back.**
 
 **How to find it:**
 
-1. **From the custom connector code**: Look for the `@ConnectorConfig` annotation's `groupId` and the build configuration's classification value
+1. **From an existing component**: If you have a pulled connection, operation, or process for this connector, the `subType` (connection and operation components) and `connectorType` (step) attributes all carry the same value
 
 2. **From Boomi platform**:
    - Create a connection in the GUI for your custom connector
    - Pull the component using `boomi-component-pull.sh`
    - Check the `subType` attribute in the pulled XML
 
-3. **From existing components**: If you have a pulled connection or operation for this connector, the `connectorType` attribute contains the same value
+3. **From the Connectors API**, which owns the value: the connector group's create response returns it, and fetching an existing group lists the classificationTypes it holds. This is the authoritative source, but it is a separate API from the Platform API these scripts call
 
-**Example identifiers:**
-- `weatherconnector-ABC123-dev`
-- `mycompanyconnector-XYZ789-prod`
-- `bigconnectorsdkresearch-VYO86P-28nov1-dev`
+The connector's own Java code is **not** a source for this value — the identifier is assigned by the platform at group-create time, not declared in the connector.
 
 ## Field Configuration
 
-Custom connector fields are defined in the connector's Java code. Use `<field>` elements (not `<property>` elements):
+Custom connector fields are declared in the connector's `connector-descriptor.xml` — the root-level `<field>` elements become the connection's fields, and only ids the descriptor declares are honored. Use `<field>` elements here (not `<property>` elements):
 
 ```xml
 <GenericConnectionConfig>
@@ -74,6 +71,21 @@ Custom connector fields are defined in the connector's Java code. Use `<field>` 
 - `boolean` - true/false values
 - `integer` - Numeric values
 
+`customproperties` does not use the `value` attribute. It nests a camelCase container whose entries are plural, one per pair:
+
+```xml
+<field id="headers" type="customproperties">
+  <customProperties>
+    <properties key="X-Trace-Id" value="abc123"/>
+    <properties key="X-Environment" value="staging"/>
+  </customProperties>
+</field>
+```
+
+Individual entries can be encrypted, in which case they carry `encrypted="true"` and a matching `<bns:encryptedValue>` path — see `openapi_connection_component.md` and `mcp_server_connection_component.md`, which document that variant. Do not put a secret in a plain `<properties value="…">`.
+
+A descriptor may also declare `privatecertificate`, `publiccertificate`, and `oauth` connection fields. How those serialize is not documented here — configure one in the GUI and pull it rather than guessing.
+
 **Example:**
 ```xml
 <GenericConnectionConfig>
@@ -85,9 +97,10 @@ Custom connector fields are defined in the connector's Java code. Use `<field>` 
 ```
 
 **Finding field IDs:**
-- Check the custom connector's `@ConnectorConfig` annotation and field definitions
+- Read the connector's `connector-descriptor.xml` — root-level `<field id="…">` elements are the connection fields
 - Pull an existing connection from the platform to see the field structure
-- If you built the connector with `implementing-boomi-connectors` skill, you know the field IDs
+
+If neither the descriptor nor a pulled example is available, ask the user for the descriptor rather than guessing ids — an undeclared id is silently dropped.
 
 ## Password Handling
 
@@ -101,7 +114,14 @@ Custom connector fields are defined in the connector's Java code. Use `<field>` 
 </bns:object>
 ```
 
-**Pulled/Existing Connections**: Preserve `<bns:encryptedValues>` and encrypted field values exactly as-is. Never modify encrypted values.
+**Never pull a connection and push it back** — doing so destroys the stored credential. To change an existing connection, have the user edit it in the GUI. `boomi_error_reference.md` Issue #39 documents the mechanics and the outcome of each pushed value.
+
+Two points specific to custom connector connections:
+
+- **The push guard does not cover this.** It rejects a pushed 128-hex token for REST Client connections only — it keys on the REST `subType`, not on the component type, which every connection shares — so a custom connector connection carrying one pushes without complaint.
+- **The GUI is the only repair path.** Environment Extensions, the alternative documented for REST connections, is not established for custom connector fields.
+
+`<bns:encryptedValues>` is platform-generated output — emit it empty. Its `path` is type-based (`field[@type='password']`), so one entry covers every password-typed field, and `isSet="true"` means "at least one is set", not which.
 
 ## Common Patterns
 
@@ -143,4 +163,4 @@ The operation component adds:
 - Request/response profiles
 - Action-specific parameters
 
-Custom connector operations follow the same `GenericOperationConfig` pattern. See `rest_connector_operation_component.md` for the structural template - custom connectors use the same `<Operation><Configuration><GenericOperationConfig>` hierarchy.
+See `custom_connector_operation_component.md` for the operation's XML and its attribute contract.

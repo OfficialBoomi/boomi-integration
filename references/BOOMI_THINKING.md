@@ -446,6 +446,6 @@ Both standards share the same pattern: a segment or loop repeats and a qualifier
 EDIFACT qualifiers often live in composite sub-elements (e.g., `RFF01.1`, `DTM01.1`) rather than standalone elements, and EDIFACT segments use composites pervasively elsewhere too. For that reason EDIFACT work almost always pulls `components/edi_profile_component.md` alongside the partner's companion guide.
 
 ## Platform Services Awareness
-Boomi offers platform services beyond Integration processes (Event Streams, DataHub, Flow, API Management, B2B/EDI, AI agents, MCP Server). These require GUI configuration but integrate with Integration processes.
+Boomi offers platform services beyond Integration processes (Event Streams, Data Hub, Flow, API Management, B2B/EDI, AI agents, MCP Server). These require GUI configuration but integrate with Integration processes.
 
-**When designing solutions**: Consider whether Event Streams (pub/sub), DataHub (master data), Flow (UI/workflows), API Gateway (advanced API management), or MCP Server (exposing processes as AI-callable tools) fit the use case better than pure Integration processes.
+**When designing solutions**: Consider whether Event Streams (pub/sub), Data Hub (master data), Flow (UI/workflows), API Gateway (advanced API management), or MCP Server (exposing processes as AI-callable tools) fit the use case better than pure Integration processes.

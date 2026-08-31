@@ -286,6 +286,8 @@ Multi-record data-positioned output concatenates records **without newline chara
 HDRORD-00123420260113CUST-ABC123         DTL001WIDGET-01     10     25.99         DTL002GADGET-02      5    149.50         TRL    2        1007.40
 ```
 
+**A flat-file record is emitted more readily than a repeating XML element.** A repeating XML element is dropped when nothing is written into it; a flat-file record is not. With a single mapping, the record is written whenever the mapped source element is **present** — an empty value still produces a contentless record, and only an absent element suppresses it. With two or more mappings drawn from the same repeating source object, the record is written for every source occurrence that exists, even one carrying none of the mapped elements. Blank records reach the consumer as data.
+
 ## Critical: enforceUnique Attribute
 
 **All `FlatFileElement` nodes MUST include `enforceUnique="false"`.**

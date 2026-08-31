@@ -148,7 +148,7 @@ Agent: [Deploys process to runtime]
 
 The skill makes the following CLI tools available to the agent:
 
-- `boomi-env-check.sh` - Checks which .env variables are set without revealing values
+- `boomi-env-check.sh` - Checks which .env variables are set without revealing values, and which required CLI tools are installed
 - `boomi-folder-create.sh` - Creates project folders
 - `boomi-component-create.sh` - Creates new components
 - `boomi-component-push.sh` - Updates existing components

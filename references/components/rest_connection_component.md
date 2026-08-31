@@ -80,19 +80,15 @@ Standard username/password authentication:
 
 Password fields are **write-only**. A pull returns a 128-character lowercase-hex token — a reference to the stored secret, not the password — and every push stores the field's `value` verbatim as the new secret.
 
-**Have the user set REST Client passwords in the Boomi GUI.** Author the field as `value=""` and have them fill it in afterward. Only a plaintext value stores correctly; **every other form destroys the credential**, pushing and deploying cleanly and then failing at request time with HTTP 401 — no design-time error:
+**So: never pull a REST connection, edit an unrelated field, and push it back.** Only a plaintext value stores correctly; every other form destroys the credential, pushing and deploying cleanly and then failing at request time with HTTP 401 — no design-time error. `boomi_error_reference.md` Issue #39 documents the mechanics and what each pushed value stores.
 
-| Pushed `value` | Stored result | Visible in a later pull? |
-|---|---|---|
-| the pulled 128-hex token | the token string becomes the password | **No** — entry stays `isSet="true"`, looks healthy |
-| `""` (empty) over a set secret | cleared | Yes — `<bns:encryptedValues/>` comes back empty |
-| field omitted | field deleted | Yes — field absent from the pulled XML |
+**Have the user set REST Client passwords in the Boomi GUI.** Author the field as `value=""` and have them fill it in afterward, or move the secret to Environment Extensions (below) so the XML becomes safe to push. Do not ask the user for the plaintext to get past this.
 
-**So: never pull a connection, edit an unrelated field, and push it back.** Have the user make the edit in the GUI, or move the secret to Environment Extensions (below) so the XML becomes safe to push. Do not ask the user for the plaintext to get past this; `boomi-component-push.sh` and `boomi-component-create.sh` refuse a pushed token outright.
+For REST Client components specifically, `boomi-component-push.sh` and `boomi-component-create.sh` refuse a pushed 128-hex token outright — the one connector family the guard covers.
 
 `<bns:encryptedValues>` is platform-generated output, not input — emit it empty. Its `path` is `field[@type='password']`, so one entry covers *every* password-typed field (`password`, `customAuthCredentials`, `awsSecretKey`): `isSet="true"` means "at least one is set", not which.
 
-**Recovering a broken connection**: have the user re-enter the password in the GUI, re-inserting the field as `value=""` first if it was deleted. Re-pulling and re-pushing only stores a fresh token. A successful push says nothing about credential validity — only executing against the target system confirms it.
+**Recovering a broken connection**: have the user re-enter the password in the GUI, re-inserting the field as `value=""` first if it was deleted. Re-pulling and re-pushing only stores a fresh token.
 
 ### Keeping the Password Out of the Component (Environment Extensions)
 

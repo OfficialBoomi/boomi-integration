@@ -35,6 +35,7 @@ Run scripts from the project workspace directory (so `.env` and `active-developm
 - **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
 - **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments). For existing `connectorType="mail"` assets, see mail_component.md instead
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
+- **Data Hub (MDM)**: datahub_connector_operation_component + connector_step + BOOMI_THINKING.md. The paired connection is bootstrapped by the `boomi-datahub` skill (`datahub-connection.sh bootstrap connector`), not built in the UI
 - **Agent Step (AI Agent in process)**: agent_step.md
 - **Flow Services**: fss_operation_component + fss_start_step + flow_service_component + platform_entities/flow.md
 - **Debugging**: boomi_error_reference.md + relevant step/component docs
@@ -53,7 +54,7 @@ Run scripts from the project workspace directory (so `.env` and `active-developm
 - `references/BOOMI_THINKING.md` - Core mental models and development philosophy (always read first)
 - `references/guides/boomi_patterns.md` - Step-by-step implementation recipes for common integration scenarios (read when designing a new process or refactoring significantly)
 - `references/guides/boomi_error_reference.md` - Error patterns, silent failures, and troubleshooting (read early in any troubleshooting effort)
-- `references/guides/boomi_platform_reference.md` - Platform services catalog (DataHub, Flow, API Gateway, B2B/EDI) with scope boundaries (read when designing a new process, evaluating designs that expand beyond integration, or refactoring significantly)
+- `references/guides/boomi_platform_reference.md` - Platform services catalog (Data Hub, Flow, API Gateway, B2B/EDI) with scope boundaries (read when designing a new process, evaluating designs that expand beyond integration, or refactoring significantly)
 - `references/guides/problem_solving_guide.md` - Tiered escalation framework for handling unexpected situations, unknown components, and undocumented scenarios (read when encountering undocumented components or unexpected behavior)
 
 **Step Type References:**
@@ -97,7 +98,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── boomi_patterns.md            # Step-by-step implementation recipes for common scenarios
 │   │   ├── boomi_error_reference.md     # Error patterns, silent failures, and troubleshooting
 │   │   ├── problem_solving_guide.md     # Tiered escalation framework for unknown components, unexpected behavior, undocumented scenarios
-│   │   ├── boomi_platform_reference.md  # Platform services catalog (DataHub, Flow, APIM, B2B/EDI) with scope boundaries
+│   │   ├── boomi_platform_reference.md  # Platform services catalog (Data Hub, Flow, APIM, B2B/EDI) with scope boundaries
 │   │   ├── api_endpoint_guide.md        # Sample developer friendly APIs for experimentation
 │   │   ├── branch_merge_guide.md        # Read when: user explicitly requests branch/merge workflows — branch lifecycle, merge requests, conflict resolution (opt-in, do not use unless directed)
 │   │   ├── branch_merge_api_behavior.md # API-level branch semantics — last resort when CLI tools don't cover an edge case. Use branch_merge_guide.md if at all possible.
@@ -135,7 +136,9 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── salesforce_connector_operation_component.md # Use when: working with existing Salesforce operations (GUI-imported) - filters, field selection, query options
 │   │   ├── boomi_for_sap_connection_component.md # connectorType: "invixoconsultinggroupas-OZI90V-boomia-prod". Use when: creating SAP connections via Boomi for SAP Core - endpoint URLs, credentials, timeouts
 │   │   ├── boomi_for_sap_connector_operation_component.md # Use when: defining SAP object queries with filters and field selection, working with Core-exposed services
+│   │   ├── datahub_connector_operation_component.md # subType: "officialboomi-X3979C-boomid-prod" — Boomi Data Hub (MDM). Use when: reading/writing golden records or quarantine entries - operation selected by customOperationType, never a legacy action="UPSERT". NOT the legacy Master Data Hub connector. Paired connection: bootstrap via the boomi-datahub skill, not the UI.
 │   │   ├── custom_connector_connection_component.md # Use when: creating connections for custom SDK connectors - connector type format, GenericConnectionConfig structure
+│   │   ├── custom_connector_operation_component.md # Use when: creating operations for custom SDK connectors - subType selects the connector build, operationType/customOperationType contract, per-document field overrides. Not the REST operation template
 │   │   ├── diskv2_connection_component.md       # connectorType: "disk-sdk". Use when: creating Disk V2 connections - local/network file system access, directory configuration, cloud runtime restrictions
 │   │   ├── diskv2_connector_operation_component.md # Use when: defining Disk V2 operations - file CREATE/UPSERT/GET/QUERY/LIST/DELETE/LISTEN, filters, actionIfFileExists, directory overrides
 │   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology". Use when: creating MFT connections - Thru MFT partner connector credentials
@@ -201,7 +204,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │
 └── scripts/                       # CLI tools — invoke as <skill-path>/scripts/<tool>.sh
     ├── boomi-common.sh          # Shared utilities sourced by all tools
-    ├── boomi-env-check.sh       # Report which .env vars are set without revealing values (pre-flight)
+    ├── boomi-env-check.sh       # Report which .env vars are set (without revealing values) and which tools are installed (pre-flight)
     ├── boomi-folder-create.sh   # Create organized project folders on platform
     ├── boomi-folder-list.sh     # List a folder's child folders or whole subtree (id + fullPath)
     ├── boomi-component-create.sh # Create new components and push to platform
@@ -302,9 +305,9 @@ When user provides component ID or platform URL: Pull the component, scan for de
 The `.sync-state/` directory tracks component synchronization (IDs, versions, conflict detection). Managed automatically by CLI tools—never manually edit.
 
 **CLI Tools:**
-Specialized tools handle the development lifecycle. All tools are bash scripts (except profile-inspect which is Python stdlib). They require `curl` and `jq` and source credentials directly from `.env` — no Python dependencies, no virtual environments.
+Specialized tools handle the development lifecycle. All tools are bash scripts (except profile-inspect which is Python stdlib). They require `curl` and `jq` (plus `unzip` for `boomi-execution-query.sh --logs`) and source credentials directly from `.env` — no Python dependencies, no virtual environments.
 
-- `boomi-env-check.sh` - Pre-flight diagnostic; reports which `.env` variables are set without revealing values
+- `boomi-env-check.sh` - Pre-flight diagnostic; reports which `.env` variables are set without revealing values, and which required CLI tools are installed
     - No arguments
 
 - `boomi-folder-create.sh` - Create project folders on platform
@@ -373,7 +376,7 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 
 - `boomi-execution-query.sh` - Query execution records and download logs for any process type
     - Optional: `--process-id`, `--status`, `--since`, `--limit` (default 3)
-    - Log download: `--execution-id <id> --logs`
+    - Log download: `--execution-id <id> --logs` (requires `unzip`; exits non-zero rather than reporting an empty log if extraction fails)
 
 - `boomi-profile-inspect.py` (Python stdlib) - Extract field inventory from large XML profiles
     - Required: `profile_path` (positional)
@@ -500,7 +503,7 @@ See `references/guides/boomi_error_reference.md` Issue #7 for folder placement v
 **Handling Blocked Dependencies:**
 When dependencies are unavailable (missing credentials, GUI-required components, API access pending), use placeholder pattern: Create named placeholder step → Add parallel test Message step with mock data → Route both to downstream logic → Replace placeholder when dependency available. Inform user of blocking issue.
 
-**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) require GUI for initial setup. For all connections, follow the connection discovery workflow (see § Connection Discovery above) — re-use existing connections or have the user create new ones in the GUI. Once pulled, preserve encrypted values exactly during subsequent pull/push cycles. **REST Client connections are an exception: never re-push a pulled one** — its `type="password"` value is a platform token, not the password, and pushing it back breaks authentication with no design-time error. See `references/components/rest_connection_component.md` § Password Encryption.
+**GUI-Required Components:** OAuth flows (browser authorization) and branded connectors (Salesforce, NetSuite - metadata import) require GUI for initial setup. For all connections, follow the connection discovery workflow (see § Connection Discovery above) — re-use existing connections or have the user create new ones in the GUI. Once pulled, preserve encrypted values exactly during subsequent pull/push cycles. **REST Client and custom SDK connector connections are exceptions: never re-push a pulled one** — the pulled `type="password"` value is not the password, and pushing it back breaks authentication with no design-time error. Have the user make the edit in the GUI instead. See `references/guides/boomi_error_reference.md` Issue #39, `references/components/rest_connection_component.md` § Password Encryption, and `references/components/custom_connector_connection_component.md` § Password Handling.
 
 ### Step Addition Workflow
 **ALWAYS read `references/steps/[step_type].md` completely before writing XML.**

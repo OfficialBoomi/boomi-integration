@@ -48,10 +48,10 @@ Defines the structure and data types for XML documents flowing through a Boomi p
 ### Basic Field Structure
 Each XMLElement requires:
 - `key` - Unique sequential identifier
-- `name` - Element/attribute name
+- `name` - Element name
 - `dataType` - character, number, datetime, bit
 - `isMappable` - true for fields you want to map
-- `isNode` - true for elements (false for attributes)
+- `isNode` - always `true`; attributes use a nested `<XMLAttribute>` (see § XML Attributes)
 - `maxOccurs` - 1 for single, -1 for unbounded/repeating
 - `minOccurs` - 0 for optional, 1 for required
 
@@ -140,14 +140,25 @@ Common patterns:
 ```
 
 ## XML Attributes
-Set `isNode="false"` for attributes:
+
+An attribute is a dedicated `<XMLAttribute>` element nested inside the `<XMLElement>` it belongs to, placed after that element's `<DataFormat>`:
+
 ```xml
-<XMLElement dataType="character" isMappable="true" isNode="false" key="30" maxOccurs="1" minOccurs="0" name="attributeName" useNamespace="-1">
+<XMLElement dataType="character" isMappable="false" isNode="true" key="30" maxOccurs="1" minOccurs="0" name="Container" useNamespace="-1">
   <DataFormat>
     <ProfileCharacterFormat/>
   </DataFormat>
+  <XMLAttribute dataType="character" isMappable="true" isNode="true" key="31" name="attributeName" required="false" useNamespace="-1">
+    <DataFormat>
+      <ProfileCharacterFormat/>
+    </DataFormat>
+  </XMLAttribute>
 </XMLElement>
 ```
+
+A map writing to key 31 renders `<Container attributeName="...">`. `<XMLAttribute>` takes no `maxOccurs`/`minOccurs`; use `required` instead.
+
+> **`<XMLElement isNode="false">` does not produce an attribute in map output** — it serializes as a child *element*. The document is well-formed and the process runs, so the mistake surfaces only when a consumer requiring the attribute rejects the shape. Model attributes with `<XMLAttribute>`.
 
 ## Namespaces
 When XML uses namespaces, define them:
@@ -244,7 +255,7 @@ Often includes envelope/body wrapper:
 - When adding nested elements, continue the sequence (don't restart at 1)
 
 ## Critical Notes
-- `isNode="true"` for XML elements, `isNode="false"` for XML attributes
+- `isNode="true"` for XML elements; XML attributes use a nested `<XMLAttribute>` (see § XML Attributes), not `isNode="false"`
 - Parent containers of nested objects should have `isMappable="false"`
 - Leaf nodes (actual data fields) should have `isMappable="true"`
 - Always include `useNamespace="-1"` unless using defined namespaces

@@ -10,10 +10,10 @@
 
 ### CLI Tools
 
-Specialized bash tools handle different aspects of the development lifecycle. All tools require `curl` and `jq`, and source credentials directly from `.env` — no Python dependencies or virtual environments needed.
+Specialized bash tools handle different aspects of the development lifecycle. All tools require `curl` and `jq`, and source credentials directly from `.env` — no Python dependencies or virtual environments needed. Run `boomi-env-check.sh` to see which required tools are installed.
 
 **Environment & Setup**:
-- **boomi-env-check.sh**: Check which `.env` variables are set without revealing values
+- **boomi-env-check.sh**: Check which `.env` variables are set without revealing values, and which required CLI tools are installed
 - **boomi-folder-create.sh**: Create new folders for project organization. Falls back to account root if `BOOMI_TARGET_FOLDER` is invalid or missing — do not attempt to manually search or resolve parent folders if absent. If the fallback WARN fires, tell the user their configured target folder was not used and confirm the correct folder ID.
 - **boomi-shared-server-info.sh**: Fetch atom `apiType`, default-port `url`, default-port `auth` (when reportable), and atom-wide `minAuth` floor from `SharedServerInformation`. Run before authoring any WSS listener or API Service Component to route by API tier (`basic`/`intermediate` → bare WSS; `advanced` → API Service Component). Takes an atom ID as arg; defaults to `$BOOMI_TEST_ATOM_ID`. Exits non-zero on lookup failure. Output is supplementary — see `references/platform_entities/shared_web_server.md` for what the API can and can't tell you about a multi-port atom.
 
@@ -31,7 +31,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-undeploy.sh**: Remove deployments by ID or by component file (`--by-component`)
 - **boomi-test-execute.sh**: Trigger process execution via platform API and return execution ID
 - **boomi-wss-test.sh**: Test WSS listener endpoints directly via the shared web server
-- **boomi-execution-query.sh**: Query execution records and download logs for any process type (including WSS listeners, manually executed processes, scheduled processes)
+- **boomi-execution-query.sh**: Query execution records and download logs for any process type (including WSS listeners, manually executed processes, scheduled processes). `--logs` also requires `unzip`, since logs arrive as a zip archive; it exits non-zero with a diagnostic when `unzip` is absent or the log cannot be extracted, rather than reporting an empty log.
 
 **Branch & Merge** (only for accounts with Branch & Merge enabled):
 - **boomi-branch.sh**: Branch lifecycle and merge request operations (subcommand-based)
@@ -298,7 +298,7 @@ When **creating** a component, use the component-type identifier in the XML's `t
 
 ### Configuration System
 **Streamlined Configuration**:
-- All configuration is sourced directly from the `.env` file — no YAML config layer. Tools `source .env` natively in bash.
+- All configuration is sourced directly from the `.env` file — no YAML config layer. Tools read it in-shell at startup.
 
 ### Activity Logging
 
@@ -319,7 +319,7 @@ Opt-in JSONL log of script-level operations (component pulls, pushes, deployment
 - Do not attempt to encrypt or re-encrypt values programmatically — this will produce broken credentials
 - Do not copy an encrypted value from one component into a different component — a transplanted ciphertext can push cleanly but fail to decrypt when the process executes (surfacing as an auth failure with no other symptom). To credential a new component, have the user set the value in the GUI on that component, then pull it
 
-**REST Client connections — password fields are write-only**: a pulled `type="password"` value is a platform token, not the password, and writing it back silently breaks the credential — never re-push a pulled REST Client connection. `boomi-component-create.sh` and `boomi-component-push.sh` refuse a pushed token (`--allow-password-token` overrides). Read `references/components/rest_connection_component.md` § Password Encryption before writing one.
+**Password fields are write-only**: a pulled `type="password"` value is a platform token, not the password, and writing it back silently breaks the credential — never re-push a pulled connection that has one. `boomi-component-create.sh` and `boomi-component-push.sh` refuse a pushed token for **REST Client components only** (`--allow-password-token` overrides); a custom SDK connector connection carrying the same token pushes unchallenged, so the rule is yours to enforce there. Read `references/guides/boomi_error_reference.md` Issue #39 before writing either.
 
 **Process property passwords**: Prefer leaving `defaultValue` empty for `type="password"` fields and supplying real values via Environment Extensions. If a pulled component has a non-empty password `defaultValue`, let the user know — they may want to migrate to Environment Extensions.
 

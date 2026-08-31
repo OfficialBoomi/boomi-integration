@@ -15,19 +15,18 @@ Custom Connector steps use connectors built with Boomi's Java Connector SDK. The
 ## Key Concepts
 
 - **Same Shape Structure**: Uses `shapetype="connectoraction"` identical to REST, Database, and other standard connectors
-- **Connector Type Format**: `{connectorGroupID}-{classification}` (e.g., `myconnector-ABC123-prod`)
-- **Classification**: Defined in the connector's build configuration (dev, prod, or custom values)
-- **Action Types**: Specific to each custom connector, defined by the connector's operations
+- **Connector Type**: The `classificationType` the platform assigns the connector — read it from an existing component or a GUI-created connection, do not construct it (see `custom_connector_connection_component.md` § Finding the Connector Type Identifier)
+- **`actionType`**: Mirror the Operation component — the `operationType` it declares, or its `customOperationType` where it has one. It is an identifier, not a label; the human-readable name belongs in the shape's `userlabel`. This is what the GUI uses to bind a newly created operation to an action, so it must be right when authoring. It is **not** a runtime contract, though: `actionType` does not drive routing, and a wrong value on an existing step pushes, deploys, and executes without changing which operation runs. What actually selects the operation is the Operation component's `customOperationType`.
 
 ## Configuration Structure
 
 ```xml
 <shape image="connectoraction_icon" name="[shapeName]" shapetype="connectoraction" userlabel="[label]" x="[x]" y="[y]">
   <configuration>
-    <connectoraction actionType="[connector-specific-action]"
+    <connectoraction actionType="[operationType-or-customTypeId]"
                     allowDynamicCredentials="NONE"
                     connectionId="[connection-component-guid]"
-                    connectorType="[connectorGroupID]-[classification]"
+                    connectorType="[classificationType]"
                     hideSettings="false"
                     operationId="[operation-component-guid]">
       <parameters/>
@@ -40,23 +39,30 @@ Custom Connector steps use connectors built with Boomi's Java Connector SDK. The
 </shape>
 ```
 
+`connectorType` should match the Operation component's `subType`, which is what actually selects the connector build that runs — see `boomi_error_reference.md` Issue #38.
+
+Per-document overrides of an operation field go in this shape's `<dynamicProperties>`; see `custom_connector_operation_component.md`.
+
 ## Required Components
 
 Before adding a Custom Connector step:
 1. **Connection Component**: See `custom_connector_connection_component.md` for full XML structure including `type="connector-settings"`, `subType` format, and `GenericConnectionConfig` field patterns
-2. **Operation Component**: Defines the action, request/response profiles (uses same `<Operation><Configuration><GenericOperationConfig>` structure as REST operations - see `rest_connector_operation_component.md`)
+2. **Operation Component**: See `custom_connector_operation_component.md` for the `GenericOperationConfig` attribute contract and how `subType` selects the connector build
 
 ## Reference XML Example
 
+Where the connector descriptor declares `<operation types="EXECUTE">` with no `customTypeId`, `actionType` carries the bare operation type and the display name sits in `userlabel`:
+
 ```xml
-<shape image="connectoraction_icon" name="shape2" shapetype="connectoraction" userlabel="" x="256.0" y="96.0">
+<shape image="connectoraction_icon" name="shape2" shapetype="connectoraction"
+       userlabel="Get Current Weather" x="272.0" y="48.0">
   <configuration>
-    <connectoraction actionType="Get Current Weather"
+    <connectoraction actionType="EXECUTE"
                     allowDynamicCredentials="NONE"
-                    connectionId="85ab1ba5-fa8e-4c17-8f95-2685525003a6"
-                    connectorType="weatherconnector-ABC123-dev"
+                    connectionId="{connection-component-guid}"
+                    connectorType="{classificationType}"
                     hideSettings="false"
-                    operationId="b4744cc9-6ce4-4bb5-b645-268eec335e4d">
+                    operationId="{operation-component-guid}">
       <parameters/>
       <dynamicProperties/>
     </connectoraction>
@@ -69,8 +75,8 @@ Before adding a Custom Connector step:
 
 ## Workflow Considerations
 
-- **Connector Development**: Use the `implementing-boomi-connectors` skill to build custom connectors with the Java Connector SDK
-- **Connection/Operation Setup**: Two paths:
-  - **With implementing-boomi-connectors skill**: Build connection/operation components programmatically (the agent knows the connector's field structure since it built the connector)
-  - **Without**: Configure in Boomi platform UI first, then pull locally for use
+- **Connector Development is out of scope.** This skill configures and uses a connector that already exists — building or publishing one with the Java Connector SDK is separate work. Do not start it on your own initiative; if a process needs a connector that has not been built, say so and let the user decide.
+- **Connection/Operation Setup**: Two paths, decided by whether the connector's `connector-descriptor.xml` is at hand:
+  - **Descriptor available**: Build connection/operation components programmatically — it declares the connection field ids, operation types, custom type ids, and operation field ids the components must name
+  - **Descriptor unavailable**: Configure in the Boomi platform UI first, then pull locally for use. Do not infer the ids from another connector's pulled component
 - **Dynamic Properties**: Custom connectors may support dynamic properties depending on their implementation

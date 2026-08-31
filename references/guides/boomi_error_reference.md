@@ -64,6 +64,17 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | "No data produced from map" after a split | #34 (Split Preserves Wrapper) |
 | "ComponentId is invalid" on a component that exists | #35 (Account Default Branch) |
 | Push reports a new version but main never changes | #35 (Account Default Branch) |
+| GUI warning: "The 'X' action is no longer available" | #36 (Unresolvable customOperationType) |
+| Custom connector operation works at runtime but the GUI flags the action | #36 (Unresolvable customOperationType) |
+| Custom connector operation form lost its object type and all its fields | #36 (Unresolvable customOperationType) |
+| Custom connector receives no value for an operation field that looks set in the GUI | #37 (Operation Field Silently Ignored) |
+| Custom connector returns plausible data for the wrong input | #37 (Operation Field Silently Ignored) |
+| Custom connector runs a different build than its connection's classification | #38 (Operation subType Selects the Build) |
+| Custom connector authentication fails after editing a pulled connection | #39 (Pulled Connection Push Destroys the Password) |
+| `Component does not exist: <guid> (in groovy2 script)` at execution | #40 (Script GUID Creates No Dependency Edge) |
+| Process Property value unreachable from Groovy after a clean push and deploy | #40 (Script GUID Creates No Dependency Edge) |
+| "No data produced from map" with no other listed cause matching | #41 (No Satisfied Mapping) |
+| Map step emits zero documents and every downstream step is skipped | #41 (No Satisfied Mapping) |
 
 ---
 
@@ -106,6 +117,12 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 33 | Disk V2 Directory Outside `work/` on Cloud Runtimes | High | Runtime error - FilePermission denial, clean push and deploy |
 | 34 | Split Documents Preserves Parent Wrapper | High | Silent in Set Properties/Route - ERROR in Map |
 | 35 | Account Default Branch Redirects Unqualified Operations | Low | Silent in the API - writes land on the default branch, main unchanged |
+| 36 | Unresolvable `customOperationType` on a Custom Connector Operation | Medium | GUI only - push, deploy and execution all succeed |
+| 37 | Operation Field Silently Ignored, GUI Shows Descriptor Default | High | No automatic detection - push, deploy, execution and GUI all report health |
+| 38 | Operation `subType` Silently Selects a Different Connector Build | Medium | Silent - one log prefix, one GUI subtitle |
+| 39 | Pushing a Pulled Connection Destroys the Password | High | Silent - fails only as remote auth rejection |
+| 40 | Script GUID Creates No Dependency Edge | High | Runtime error - push and deploy both clean |
+| 41 | A Map With No Satisfied Mapping Emits Zero Documents | High | Explicit ERROR at the map step - zero documents, downstream skipped |
 
 ---
 
@@ -1573,6 +1590,8 @@ Boomi trims extracted field values before comparing them against `identityValue`
 
 **Single-record scenario:** No records match. Error: `"No data produced from map, please check source profile and make sure it matches source data."`
 
+This is one specific cause of the zero-document map failure — see Issue #41 for the general case.
+
 ### Why It Happens
 
 In a data positioned profile, fields have fixed widths. If an identity value is shorter than the field width (e.g., "BF" in a 3-char field), the extracted value is "BF " (padded with trailing space). Boomi trims this to "BF" before comparison. But `identityValue="BF "` is compared as-is — "BF" ≠ "BF ".
@@ -1966,6 +1985,8 @@ A Split Documents step reduces the array or repeating element to one occurrence 
 - **Route** matches nothing, so every document falls to the Default path
 - **Map** fails with `No data produced from map '<name>', please check source profile and make sure it matches source data`, emitting zero documents, so downstream steps are skipped
 
+The Map case is one specific cause of the zero-document map failure — see Issue #41 for the general case.
+
 ### The Rule
 
 Downstream of a split, reuse the same profile and nested element keys as upstream of it. See `references/steps/data_process_step.md` § Output Document Shape.
@@ -1998,5 +2019,249 @@ Pass `--branch main` for operations that must target main. The default is set in
 ### Related
 
 - `references/guides/branch_merge_api_behavior.md` § Account Default Branch — per-endpoint behavior and the `currentVersion` surface split
+---
+
+## Issue #36: Unresolvable `customOperationType` on a Custom Connector Operation
+
+**Frequency:** Medium (any hand-authored SDK connector operation component)
+**Detection:** Silent at every automated checkpoint — the GUI is the only surface that reports it
+
+### The Problem
+
+A custom connector Operation component whose `customOperationType` names a `customTypeId` the connector descriptor never declared cannot be resolved. The Boomi GUI reports it as:
+
+> The "EXECUTE" action is no longer available. Visit our documentation to learn about available options.
+
+The wording points at a platform deprecation. It is not one — EXECUTE is a current operation type, and all eight `OperationType` constants exist in the SDK. The message echoes the component's `customOperationType` attribute verbatim, which is why it can name a perfectly valid operation type: a component with `operationType="EXECUTE"` *and* `customOperationType="EXECUTE"` produces this banner about the second attribute while the first is entirely valid.
+
+**The banner is not the whole symptom — the operation form collapses.** Because the platform cannot locate the descriptor's operation definition, every descriptor-driven part of the form disappears: the Object dropdown goes blank and the operation's declared fields are not rendered at all, replaced by a generic Request Profile chooser. The stored field values remain in the XML and still reach the connector at runtime, so they are live but invisible and uneditable. A GUI save from that state has no field to write back, risking silent loss of values the form never showed.
+
+Everything else passes: the connector's Java compiles, descriptor validation succeeds, the connector version uploads, the component pushes, the deploy succeeds, and **the process executes to COMPLETE**. The runtime resolves the operation from `operationType` alone and ignores an unresolvable `customOperationType`, so the operation does the right thing at runtime. Working from the CLI and execution logs alone, the pipeline looks entirely green.
+
+```xml
+<!-- BROKEN — names a customTypeId the descriptor never declares -->
+<GenericOperationConfig customOperationType="EXECUTE" objectTypeId="CurrentWeather" operationType="EXECUTE">
+
+<!-- CORRECT — base operation type only -->
+<GenericOperationConfig objectTypeId="CurrentWeather" objectTypeName="Current Weather" operationType="EXECUTE">
+```
+
+### The Rule
+
+Omit `customOperationType` entirely unless the connector descriptor declares a `customTypeId` on that operation. Author the component's attributes from the descriptor, not by copying another connector's pulled operation — a working component from a *different* connector may legitimately carry a `customOperationType` backed by its own descriptor.
+
+### Related
+
+`customOperationType` is not the only attribute the platform accepts without checking. A wrong `objectTypeId` behaves the same way at runtime — silent, successful, correct output — and a wrong `<field id>` is worse still (Issue #37).
+
+### Detection
+
+There is no CLI check. Open the operation component in the Integration GUI, or verify the attributes against the connector descriptor before pushing. The connector descriptor validator inspects the descriptor only and has no visibility into components.
+
+The connector itself is the one component positioned to notice: the platform passes the unresolvable value through untouched, so a connector that validates `getCustomOperationType()` against its own known set and throws `ConnectorException` on a miss turns this GUI-only defect into a loud runtime failure.
+
+### Fixing It
+
+**The Connector Action dropdown is disabled on an existing operation component.** An operation is bound to the action chosen when it was created, so this cannot be repaired in the GUI — either correct `customOperationType` in the component XML and push, or create a replacement operation from the canvas and repoint the step at it.
+
+The same collapse hits every existing operation component for a connector whose descriptor **newly names** a previously-unnamed operation: those components carry no `customOperationType`, so they no longer match a declared operation. Activating such a connector version breaks consumers at design time with no warning, while their integrations keep running. Connector authors should name operations from the first published version.
+
+---
+
+## Issue #37: Operation Field Silently Ignored While the GUI Shows the Descriptor Default
+
+**Frequency:** High (any hand-authored custom connector operation)
+**Detection:** No automatic detection. Every available diagnostic reports health, including the GUI.
+
+### The Problem
+
+A `<field id="…">` in a custom connector Operation component that does not match a descriptor-declared id still reaches the connector — under the wrong name. The platform does not filter operation properties against the descriptor, so the misnamed key is delivered verbatim and the id the connector actually reads is simply absent. Nothing replaces it: the descriptor's `<defaultValue>` is **not** applied at runtime, so the connector falls back to whatever its own code does with a missing value.
+
+A one-character typo is enough. With `latitide` for `latitude`: the push succeeds, the deploy succeeds, execution reports COMPLETE, and a well-formed document comes back containing plausible data for entirely the wrong input.
+
+**The GUI actively reassures you.** Opening that component shows the field populated with the descriptor's `<defaultValue>` — a value the stored XML does not contain and the runtime never sends. `<defaultValue>` is a design-time pre-fill only, so design time and runtime disagree and the reassuring surface is the GUI. There is no warning banner, unlike Issue #36.
+
+Worse, because the GUI renders that default into a real form field, opening and saving the component writes the default into the XML — silently "fixing" it to a value the author never chose.
+
+### Detection
+
+Only two things work:
+
+- Diff the component's `<field id>` values against the descriptor's `<operation>` field ids, character by character.
+- Log `getOperationProperties().keySet()` from the connector. The platform delivers undeclared ids through untouched, so the received key set is the ground truth — an unexpected key or a missing expected one is the signal.
+
+An *extra* undeclared field alongside the correct one is harmless for a connector that reads fields by name, but a connector enumerating properties generically must filter them itself.
+
+### The Fix
+
+Correct the `<field id>` in the component XML to match the descriptor and push. There is no GUI repair path: the GUI never showed the misnamed field, and opening the component writes the descriptor default into the XML — replacing the intended value with one the author never chose and erasing the evidence of the typo.
+
+---
+
+## Issue #38: Operation `subType` Silently Selects a Different Connector Build
+
+**Frequency:** Medium (any account with more than one classification on a connector)
+**Detection:** Silent. One log prefix and one small GUI subtitle.
+
+### The Problem
+
+On a custom connector Operation component, `subType` is not merely metadata that ought to agree with the connection — **it selects which connector classification, and therefore which connector version, executes.** The Connection component contributes only its field values.
+
+A mismatch between the operation's `subType` and the connection's is accepted on push, on deploy, and at execution, with correct-looking output. In normal use — `dev`, `qa`, and `prod` classifications carrying different connector versions — the result is that the runtime loads a different connector build than the connection belongs to, with the connection's credentials, and reports nothing.
+
+This is easy to do by accident: each classification appears in the Integration connector picker as its own separately selectable connector, with a near-identical display name.
+
+### Detection
+
+- **Process log.** The connector step logs `<connection name>: <classificationType> Connector; <operation name>`. Compare that classificationType against the connection component's `subType` — this is the only CLI-visible signal.
+- **GUI.** A small grey label beside the component name names the connector the component belongs to. Comparing that label on the connection and on the operation is the only design-time check, and nothing draws attention to a discrepancy.
+
+### The Fix
+
+Set the operation component's `subType` to the same `classificationType` as the connection's and push. Check the log prefix on the next execution to confirm the intended classification ran.
+
+---
+
+## Issue #39: Pushing a Pulled Connection Destroys the Password
+
+**Frequency:** High for REST Client and custom SDK connector connections edited by pull-then-push
+**Detection:** Silent at design time — surfaces only as an authentication rejection from the target system.
+
+This is the canonical description of the hazard. `rest_connection_component.md` § Password Encryption and `custom_connector_connection_component.md` § Password Handling cover what is specific to each.
+
+### The Problem
+
+`type="password"` fields are **write-only**. A pull returns a 128-character lowercase-hex token — a reference to the stored secret, not the password — and every push stores the field's `value` verbatim as the new secret. Preserving that hex string byte for byte therefore makes the hex string itself the credential, and the connector presents 128 characters of hex where the password should be.
+
+`isSet="true"` in `<bns:encryptedValues>` does not protect the value; it is display metadata meaning "at least one password-typed field is set", not which. Every form of the field other than a plaintext value destroys the credential:
+
+| Pushed `value` | Stored result | Visible in a later pull? |
+|---|---|---|
+| the pulled 128-hex token | the token string becomes the password | **No** — entry stays `isSet="true"`, looks healthy |
+| a truncated or altered token | that string becomes the password | **No** — same |
+| `""` (empty) over a set secret | cleared | Yes — `<bns:encryptedValues/>` comes back empty |
+| field omitted | field deleted | Yes — field absent from the pulled XML |
+
+Push, deploy, and execution all succeed. Only the remote system rejects the credential.
+
+The push-time guard is narrower than the hazard: `boomi-component-push.sh` and `boomi-component-create.sh` reject a pushed 128-hex token for REST Client components only. A custom SDK connector connection (`type="connector-settings"`) carrying the same token pushes without complaint.
+
+### The Fix
+
+Have the user re-enter the password in the GUI. Author the field as `value=""` and have them fill it in afterward, re-inserting the field first if it was deleted. Do not ask the user for the plaintext to work around this.
+
+For **REST connections**, moving the secret to Environment Extensions makes the component XML safe to pull, edit, and push freely — see `rest_connection_component.md` § Keeping the Password Out of the Component. That path is not established for custom connector connection fields; there, the GUI is the only remedy.
+
+Re-pulling and re-pushing only stores a fresh token. A successful push says nothing about credential validity — only executing against the target system confirms it.
+
+---
+
+## Issue #40: Component GUID in a Script Body Creates No Dependency Edge
+
+**Frequency:** High (any script reading a Process Property component by GUID)
+**Detection:** Runtime error — push and deploy both complete cleanly, with no warning
+
+### The Problem
+
+A component GUID written as a string literal inside a script body is opaque text to the platform's reference analysis. No dependency edge is formed, so the referenced component is **not packaged** with the process at deploy time. If no other reference in the process pulls it into the package, execution fails:
+
+```
+Error executing data process
+Caused by: com.boomi.process.ProcessException: Component does not exist:
+{PROCESS_PROPERTY_COMPONENT_ID} (in groovy2 script)
+Caused by: java.lang.IllegalArgumentException: Component does not exist:
+{PROCESS_PROPERTY_COMPONENT_ID}
+```
+
+The canonical case is `ExecutionUtil.getProcessProperty(componentId, key)` in a Data Process step. Push returns success, `boomi-deploy.sh` reports success, and the failure is deferred to the first execution.
+
+### Why It Happens
+
+`ExecutionUtil.getProcessProperty` resolves the Process Property component out of the **deployed package** at execution time. Package contents are computed from the structured references in the process XML — shape attributes, parameter values, profile and map references. A GUID inside `<script>` text is never parsed as one of those, so the component never enters the package and the runtime lookup has nothing to load.
+
+This is a packaging failure, not a scripting failure. The script is syntactically fine and the GUID is correct; the component simply is not there.
+
+### Wrong Pattern — Script Is the Only Reference
+
+The GUID appears exactly once in the process XML, inside the script body:
+
+```groovy
+String targetUrl = ExecutionUtil.getProcessProperty(
+    "{PROCESS_PROPERTY_COMPONENT_ID}", "prop-target-url");
+```
+
+Querying the process component's references returns nothing, and the deployed package contains only the process:
+
+```
+Found 0 reference(s) (references: 0, referenced-by: 0)
+```
+
+### Correct Pattern — Read Into a DPP With a Set Properties Step
+
+A Set Properties step using `valueType="definedparameter"` is a structured reference. It creates the edge, packages the component, and puts the value in a DPP that scripts can read without naming any GUID:
+
+```xml
+<parametervalue key="1" valueType="definedparameter">
+  <definedprocessparameter componentId="{PROCESS_PROPERTY_COMPONENT_ID}"
+                           componentName="API Settings"
+                           propertyKey="prop-target-url"
+                           propertyLabel="API Base URL"/>
+</parametervalue>
+```
+
+```groovy
+String targetUrl = ExecutionUtil.getDynamicProcessProperty("DPP_TARGET_URL");
+```
+
+The reference query then reports the edge, the deployed package carries both components, and a direct `getProcessProperty` call in the same process resolves.
+
+### The Rule
+
+A script may only reach a component that something else in the process already references structurally. When a script must call `getProcessProperty` or `setProcessProperty` directly — writing values back, or choosing the property key at execution time — keep at least one Set Properties step reading that component so it stays packaged.
+
+### Related
+
+- `references/components/process_property_component.md` § Referencing in Groovy Scripts
+- `references/steps/set_properties_step.md` — `definedparameter` source value syntax
+- Issue #30 is the sibling deploy-clean / execution-fail pattern for script *syntax*; this issue is the same failure timing for script *references*
+- Issue #3 covers the other packaging-dependency trap, parent processes and subprocesses
+
+---
+
+## Issue #41: A Map With No Satisfied Mapping Emits Zero Documents
+
+**Frequency:** High (any map whose source data may not match the source profile in every mapped position)
+**Detection:** Explicit ERROR at the map step — zero documents emitted, every downstream step skipped.
+
+Issues #26 and #34 are two specific causes of this error. This is the general case.
+
+### The Problem
+
+A map produces output only for the mappings the source data actually satisfies. When **no** mapping in the map is satisfied, the map emits **zero documents** rather than an empty one, and the map step fails:
+
+```
+No data produced from map '<name>', please check source profile and make sure it matches source data.
+```
+
+The process logs a document error and every downstream step is skipped. Through a web service listener this surfaces as HTTP 500.
+
+The message's advice is accurate — the source data does not match the source profile in any mapped position. The trap is the assumption that a map with nothing to write produces an empty document. It produces no document.
+
+### The Rule
+
+**One satisfied mapping keeps the document alive.** A map containing a mapping the data always satisfies emits a document even when every other mapping comes up empty — the unsatisfied target fields are simply absent from the output. Where a map has a single data path and that path can be missing, the failure is total rather than partial.
+
+The distinction is presence, not value. A present source element with an empty value satisfies its mapping and keeps the document alive; an absent source element does not. So the same map can return a valid near-empty document for one input and fail outright for another that differs only by a missing key.
+
+Guard a map whose only mapping can come up empty by adding a second mapping from a source element that is always present.
+
+### Known specific causes
+
+| Cause | Where |
+|---|---|
+| The map's only mapping feeds a Set function — the side effect does not count as output | `components/map_component_functions.md` |
+| UDF interface drift after removing or renumbering a key | `components/user_defined_function_component.md` |
+| Identity-value trimming in a data positioned profile, when the unmatched record is the only record | Issue #26 |
+| Profile-keyed access after a Split Documents step, which preserves the parent wrapper | Issue #34 |
 
 ---
