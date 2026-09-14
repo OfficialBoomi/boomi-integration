@@ -18,6 +18,13 @@ This is the Boomi Process Development Framework - a reusable skill that enables 
 
 Run scripts from the project workspace directory (so `.env` and `active-development/` resolve correctly), but always invoke them with the full absolute `<skill-path>/scripts/...` path.
 
+If you find yourself needing to craft custom curl - stop and discuss with the user before proceeding. This is unexpected.
+
+If you attempt to call into the Boomi platform and get an auth error - stop and discuss with the user before proceeding. Repeated calls with invalid auth will get us locked out of the platform.
+
+## Peripheral Skills
+If the `boomi-marketplace` skill is available, it can search a portfolio of Boomi design patterns, use cases, and reusable assets. Before hand-building a process, consider offering it. With the user's approval you may import assets for reference or as reusable templates.
+
 ## Documentation Architecture
 
 **SKILL.md is the navigation hub**: This file contains file references and routing guidance. Other documentation files contain minimal cross-references by design - this prevents deep hierarchical dependencies (which causes skimming at lower levels) and keeps navigation centralized.
@@ -31,6 +38,7 @@ Run scripts from the project workspace directory (so `.env` and `active-developm
 - **Map transformations**: map_component.md + map_component_functions.md + source/target profile docs
 - **Event Streams**: event_streams_connection + operation + steps + platform_entities/event_streams.md
 - **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
+- **Find Changes (CDC)**: steps/find_changes_step.md + matching profile doc (flat_file_profile_component.md / xml_profile_component.md / database_profile_component.md) + process_component.md + BOOMI_THINKING.md (Converging Outcomes)
 - **Disk V2 (File System)**: diskv2_connection_component + diskv2_connector_operation_component + diskv2_connector_step
 - **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
 - **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments). For existing `connectorType="mail"` assets, see mail_component.md instead
@@ -180,6 +188,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── route_step.md        # Multi-path conditional routing. Use when: routing documents to 3+ paths based on a value (switch/case), replacing chained decision steps
 │   │   ├── business_rules_step.md # Named-rule document validation with Accepted/Rejected routing. Use when: validating a document against one or more conditions where the failure reason must be reported, or replacing Decision chains that exist only to validate
 │   │   ├── branch_step.md       # Sequential multi-path document routing. Use when: same data needs different processing for different targets or a process should execute multiple distinct workflows
+│   │   ├── find_changes_step.md # Change Data Capture routing (shapetype changedatacapture). Use when: detecting Add/Update/Delete between full-dataset executions via a runtime-stored snapshot; single inbound, three labeled outputs. Flat File / XML / DB profiles only (no JSON)
 │   │   ├── flow_control_step.md # Batching and parallel fiber execution. Use when: serializing downstream steps per-document, splitting documents into batches, or spreading documents across parallel threads/processes
 │   │   ├── process_call_step.md # Subprocess invocation and return handling. Use when: modularizing logic, enabling test mode for listener-based processes, combining documents across branches, wiring multiple return paths so they stay readable on the canvas
 │   │   ├── process_route_step.md # Use when: dynamically selecting which subprocess runs from a route key resolved at execution time (vs a static Process Call). Requires a Process Route component, the resource::rout: reference prefix, and independent deploy of every participant.
@@ -192,7 +201,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── mcp_server_start_step.md  # MCP Server entry point. Use when: creating listener processes that expose tools to AI agents via MCP protocol
 │   │   ├── trading_partner_steps.md # B2B/EDI start and send shapes. Use when: building processes that receive from or send to trading partners via AS2, FTP, SFTP, etc.
 │   │   ├── document_cache_steps.md # Document Cache steps (Add, Retrieve, Remove). Use when: adding documents to cache, retrieving cached documents, removing from cache, using cache lookups as parameter sources
-│   │   └── shape_notes.md       # Canvas annotations visible in GUI. Use when: user explicitly requests adding documentation notes to process shapes
+│   │   └── shape_notes.md       # Canvas annotations visible in GUI, one per shape, ~300 character hard limit each (count them, do not eyeball). Use when: user explicitly requests adding documentation notes to process shapes
 │   │
 │   └── platform_entities/       # Platform service configuration and management
 │       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, transaction pair dependencies, X12↔EDIFACT equivalence, validation, communication connectors

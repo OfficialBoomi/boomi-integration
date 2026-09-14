@@ -128,7 +128,7 @@ Errors inserts at position 2 when enabled. Archive appends at the end. Acknowled
 
 ## Output Paths (Send Shape)
 
-The Send step always needs an Errors path (it is default generated when a user creates the step the GUI). The GUI renders available output paths based on the shapetype and configuration — `<dragpoint>` children only appear in the XML when wired to a target shape. An unwired path is represented by `<dragpoints/>` with no children, which is valid and non-blocking at build time. When building a TP Send, wire the Errors path to a downstream step (typically a Stop step if no error handling logic is needed).
+The Send step always needs an Errors path (it is default generated when a user creates the step in the GUI). The GUI renders available output paths based on the shapetype and configuration — `<dragpoint>` children only appear in the XML when wired to a target shape. An unwired path is represented by `<dragpoints/>` with no children. Nothing at push or deploy flags that, but Send is not a terminal shape, so an unwired path is a defect — see error reference Issue #43. When building a TP Send, wire the Errors path to a downstream step (typically a Stop step if no error handling logic is needed).
 
 An Archive path is also available when the Archiving option is selected.
 

@@ -265,11 +265,13 @@ Error handling with dual paths: Try for normal processing, Catch for errors. Pla
 **Catch path pattern:** Always include Notify step to log error details (`meta.base.catcherrorsmessage`) and further handling or termination for the document as necessary.
 
 ### Dragpoints and Output Path Wiring
-The `<dragpoints>` element is **required** on every shape — omitting it causes a schema validation failure. An empty `<dragpoints/>` means no outgoing connections and is valid for terminal shapes.
+The `<dragpoints>` element is **required** on every shape — omitting it causes a schema validation failure. An empty `<dragpoints/>` declares no outgoing connections. That is only correct on the four shapes that never pass documents to a downstream shape: Stop, Exception, Return Documents, Add to Cache.
 
-`<dragpoint>` children represent wired connections via `toShape="shapeN"`. For unwired output paths (e.g., a TP Send Errors path not yet connected), use `toShape="unset"` — this is the conventional representation and is preserved exactly by the platform. The GUI renders available output paths based on shapetype and configuration, independent of what `<dragpoint>` children exist in the XML.
+**Every other shape should have a wired path.** A Stop step communicates an intended stopping point; a dangling shape reads as an oversight — and, depending on the shape, fails at execution or silently drops a branch despite a clean push and deploy (see error reference Issue #43).
 
-Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring at the API level — some paths wired, others with `toShape="unset"`. However, always wire all paths to a downstream step (even if just a Stop step) as a best practice.
+`<dragpoint>` children represent wired connections via `toShape="shapeN"`. A path with no target is written `toShape="unset"` — the conventional representation, preserved exactly by the platform. It is a placeholder, not a connection: an unset path has no target and nothing runs down it. The GUI renders available output paths based on shapetype and configuration, independent of what `<dragpoint>` children exist in the XML.
+
+Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring at the API level — some paths wired, others unset. Nothing at push or deploy distinguishes a path left unset by oversight from one left unset by intent.
 
 **Dragpoint `x`/`y` are cosmetic.** They survive an API round trip exactly as authored, but they do not control the path a connector line takes, and the GUI regenerates return-path dragpoint coordinates from the target step's position the first time the process is opened and saved there — no human edit required. Do not rely on any dragpoint coordinate as a layout mechanism. Connector lines are routed orthogonally — horizontal and vertical segments only, never diagonal — and each outcome's label is drawn at the **target** end of its line, immediately before the target step. A step's own `x`/`y` is the only geometry worth authoring carefully.
 

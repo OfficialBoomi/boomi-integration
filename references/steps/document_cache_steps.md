@@ -118,7 +118,9 @@ Removes documents from the cache.
       </cacheKeyValues>
     </doccacheremove>
   </configuration>
-  <dragpoints/>
+  <dragpoints>
+    <dragpoint name="[shapeName].dragpoint1" toShape="[nextShape]" x="[x]" y="[y]"/>
+  </dragpoints>
 </shape>
 ```
 
@@ -270,7 +272,9 @@ Flat file documents with multiple records must be split before caching for per-r
       <cacheKeyValues/>
     </doccacheremove>
   </configuration>
-  <dragpoints/>
+  <dragpoints>
+    <dragpoint name="shape16.dragpoint1" toShape="shape17" x="640.0" y="664.0"/>
+  </dragpoints>
 </shape>
 ```
 

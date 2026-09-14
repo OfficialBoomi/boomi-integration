@@ -471,7 +471,7 @@ When `connector.disk-sdk.directory` is set, all ID parameters and filter values 
 <documentproperty name="Disk v2 - Directory"
     propertyId="connector.disk-sdk.directory">
   <sourcevalues>
-    <parametervalue valueType="static">
+    <parametervalue key="0" valueType="static">
       <staticparameter staticproperty="work/output"/>
     </parametervalue>
   </sourcevalues>
@@ -479,7 +479,7 @@ When `connector.disk-sdk.directory` is set, all ID parameters and filter values 
 <documentproperty name="Disk v2 - File Name"
     propertyId="connector.disk-sdk.fileName">
   <sourcevalues>
-    <parametervalue valueType="static">
+    <parametervalue key="0" valueType="static">
       <staticparameter staticproperty="result.txt"/>
     </parametervalue>
   </sourcevalues>

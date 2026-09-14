@@ -19,6 +19,18 @@ Shape notes add documentation visible in the Boomi GUI to process shapes. Notes 
 - **~300 character limit** per note - keep notes as brief as possible
 - **One note per shape** - multiple notes on a single shape are not supported
 
+### Honoring the character limit
+
+Before writing each note into the XML, count it - do not estimate:
+
+```bash
+printf '%s' '<p>Clears the document body before the REST call because the GET operation takes no request body.</p>' | wc -m
+```
+
+- Count the unescaped HTML, tags included — markup is part of the budget.
+- Over 300: cut and re-count. Do not split into a second note or move the overflow onto a neighboring shape.
+- Target one `<p>` of ~250 characters - one sentence on *why* the shape exists. If it will not fit, say so and put the detail in the process description.
+
 ## XML Structure
 
 The `<stepnotes>` element is a child of `<shape>`, placed after `<dragpoints>`:

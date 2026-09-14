@@ -75,6 +75,13 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | Process Property value unreachable from Groovy after a clean push and deploy | #40 (Script GUID Creates No Dependency Edge) |
 | "No data produced from map" with no other listed cause matching | #41 (No Satisfied Mapping) |
 | Map step emits zero documents and every downstream step is skipped | #41 (No Satisfied Mapping) |
+| Set Properties shape will not open in the GUI / double-clicking does nothing | #42 (Missing parametervalue key) |
+| Set Properties dialog silently fails to open, process runs correctly | #42 (Missing parametervalue key) |
+| Agent-authored process executes correctly but its Set Properties shapes cannot be edited | #42 (Missing parametervalue key) |
+| `IndexOutOfBoundsException: Index 0 out of bounds for length 0` at execution | #43 (Empty dragpoints on a document-emitting shape) |
+| `First document failure: Index 0 out of bounds for length 0` on a map step | #43 (Empty dragpoints on a document-emitting shape) |
+| Last shape in a process errors before doing any of its own work | #43 (Empty dragpoints on a document-emitting shape) |
+| Branch reports success but no branch actually ran | #43 (Empty dragpoints on a document-emitting shape) |
 
 ---
 
@@ -123,6 +130,8 @@ A comprehensive guide to Boomi error patterns, silent failures, and issues that 
 | 39 | Pushing a Pulled Connection Destroys the Password | High | Silent - fails only as remote auth rejection |
 | 40 | Script GUID Creates No Dependency Edge | High | Runtime error - push and deploy both clean |
 | 41 | A Map With No Satisfied Mapping Emits Zero Documents | High | Explicit ERROR at the map step - zero documents, downstream skipped |
+| 42 | Missing `key` on a Set Properties `<parametervalue>` | High | GUI only - push, deploy and execution all succeed |
+| 43 | Empty `<dragpoints/>` on a Shape That Emits Documents | High | Runtime error - push and deploy both clean; silent on a Branch |
 
 ---
 
@@ -2263,5 +2272,163 @@ Guard a map whose only mapping can come up empty by adding a second mapping from
 | UDF interface drift after removing or renumbering a key | `components/user_defined_function_component.md` |
 | Identity-value trimming in a data positioned profile, when the unmatched record is the only record | Issue #26 |
 | Profile-keyed access after a Split Documents step, which preserves the parent wrapper | Issue #34 |
+
+---
+
+## Issue #42: Missing `key` on a Set Properties `<parametervalue>` Makes the Shape Un-editable
+
+**Frequency:** High (any Set Properties shape authored programmatically rather than round-tripped through the GUI)
+**Detection:** GUI only — push, validation, versioning, deploy and execution all succeed.
+
+### The Problem
+
+A Set Properties (`documentproperties`) shape whose `<sourcevalues>` contains a `<parametervalue>` with no `key` attribute is un-editable in the platform UI. The shape still draws on the canvas; double-clicking it silently does nothing. No validation error, no warning, no request-time symptom — the process executes correctly. The defect is invisible until a human tries to edit the shape, and the only recovery is to repair the XML and re-push. A process that sets properties in many shapes can be almost entirely un-editable.
+
+**Scope.** This entry covers the top-level `<parametervalue>` elements of a Set Properties `<sourcevalues>` group. `<parametervalue>` in any other context — connector-step `<parameters>`, Message and Notify placeholders, the nested `<inputs>` of a lookup source value — is out of scope here.
+
+### Why It Happens
+
+`key` is a design-time identifier the configuration editor requires in order to render the parameter rows. It is ignored at request time — substitution and concatenation follow XML element order, never `key` — which is why omitting it produces no request-time symptom.
+
+The GUI stamps `key` on every source value it authors, so a keyless one is in practice agent-authored.
+
+### Wrong Pattern — Shape Cannot Be Opened
+
+```xml
+<sourcevalues>
+  <!-- no key attribute -->
+  <parametervalue valueType="static">
+    <staticparameter staticproperty="hello"/>
+  </parametervalue>
+</sourcevalues>
+<!-- Result: pushes, validates, versions and executes correctly; the Set Properties
+     dialog silently never opens and the shape is read-only in the GUI -->
+```
+
+### Correct Pattern — Dialog Opens
+
+```xml
+<sourcevalues>
+  <parametervalue key="0" valueType="static">
+    <staticparameter staticproperty="hello"/>
+  </parametervalue>
+</sourcevalues>
+<!-- Result: pushes, executes AND opens in the GUI -->
+```
+
+### The Rule
+
+**Emit `key` on every Set Properties source value** — a 0-based sequence over the top-level source values of each `<sourcevalues>` group, restarting at `0` per group. This matches what the GUI itself writes: adding a third source value to a group of two yields `key="2"`, and a sibling `<sourcevalues>` group in the same shape stays at `0,1` rather than shifting. Gaps are harmless; absence is not.
+
+Because the platform substitutes parameters by element order and never by `key`, adding a missing `key` is **inert at request time**: preserve element order and the repair changes no behavior, so it needs no redeploy — only a re-push and a page reload.
+
+**Opening and saving the process in the GUI does not repair it.** The editor assigns `key` only to elements it creates and leaves every untouched shape byte-identical — it does not back-fill keys elsewhere in the process. A keyless shape stays keyless until corrected XML is pushed, and since the shape cannot be opened in the first place, there is no GUI-only recovery path.
+
+### Detection
+
+Scan any process XML before pushing it. Scope the scan to `<sourcevalues>` so `<parametervalue>` in other contexts isn't flagged:
+
+```bash
+awk '/<sourcevalues>/{s=1} s && /<parametervalue/ && !/key=/{print FNR": "$0} /<\/sourcevalues>/{s=0}' process.xml
+```
+
+Any output is a defect. The reset trails the check so a `<sourcevalues>` group closed on its own opening line is still scanned. Two formatting limits: on single-line XML one `key=` anywhere on the line suppresses every match, and a `<parametervalue` whose attributes wrap onto a continuation line reports as a defect even when `key` is present on the next line. Format the document one element per line before scanning it.
+
+### Related
+
+- `references/guides/parameter_value_types.md` — per-type `<parametervalue>` forms
+- `references/steps/set_properties_step.md` — the affected shape
+- Issues #14, #15, #16, #28 and #36 are the sibling pattern: valid-and-executing XML that the GUI cannot render
+
+---
+
+## Issue #43: Empty `<dragpoints/>` on a Shape That Emits Documents
+
+**Frequency:** High (any process authored programmatically whose last shape is not a designated terminal)
+**Detection:** Runtime error — push and deploy both clean. Silent on a Branch.
+
+### The Problem
+
+An empty `<dragpoints/>` declares no outgoing connections. That is only correct on the four shapes that never pass documents to a downstream shape: **Stop, Exception, Return Documents, Add to Cache**. On any other shape the process pushes and deploys with no error or warning, and the defect surfaces only when the process runs.
+
+A shape that emits documents downstream — Message, Set Properties, Data Process, Notify — fails on its first execution:
+
+```
+SEVERE  <step label>  Unexpected error executing process: java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+java.lang.IndexOutOfBoundsException: Index 0 out of bounds for length 0
+	at java.base/java.util.Collections$UnmodifiableList.get(Collections.java:1310)
+	at com.boomi.process.graph.ProcessShape.getNextWriteStore(ProcessShape.java:486)
+	at com.boomi.process.shape.MessageShape.execute(MessageShape.java:52)
+```
+
+Only the last frame varies by shape — `DocumentPropertyShape.execute`, `DataProcessShape.execute`, `NotifyShape.execute`. The failure precedes the step's own work: a Notify in this state writes none of its usual log lines, and a Data Process logs no execution result.
+
+A **Map** fails on the same condition but reports it as a document error, with no stack trace:
+
+```
+INFO     Executing Map with 1 document(s).
+INFO     Shape executed with errors in 69 ms.
+WARNING  <process name> encountered 1 document error(s)
+SEVERE   First document failure: Index 0 out of bounds for length 0
+```
+
+Searching logs for `IndexOutOfBoundsException` does not find the Map case — the message appears without the Java class name.
+
+A **Branch** does not fail at all. It executes, reports success, and the process completes normally with every declared branch silently dropped. A `numBranches="2"` Branch with empty `<dragpoints/>` is indistinguishable at push, deploy and execution time from a correctly wired one.
+
+### Why It Happens
+
+A shape that produces output asks the process graph for the document store to write into. `getNextWriteStore` indexes position 0 of that list; with no dragpoints the list is empty and the lookup throws. Nothing about this is specific to one shape type — the shared frame is the same in every case, and only the calling shape class differs.
+
+A Branch instead iterates its dragpoint list. An empty list means zero iterations: nothing to write, no exception, and no branch executed.
+
+### Wrong Pattern — Deploys Clean, Fails at Execution
+
+```xml
+<shape name="shape3" shapetype="message">
+  <configuration><message>...</message></configuration>
+  <dragpoints/>
+</shape>
+<!-- Result: push SUCCESS, deploy SUCCESS, first execution ERROR -->
+```
+
+### Correct Pattern — Wired to a Terminal
+
+```xml
+<shape name="shape3" shapetype="message">
+  <configuration><message>...</message></configuration>
+  <dragpoints>
+    <dragpoint name="shape4" toShape="shape4"/>
+  </dragpoints>
+</shape>
+<shape name="shape4" shapetype="stop">
+  <configuration><stop continue="true"/></configuration>
+  <dragpoints/>
+</shape>
+```
+
+### The Rule
+
+**End every path at Stop, Exception, Return Documents, or Add to Cache.** Any other shape needs a wired path, and a Stop step is always a legal target.
+
+Surviving execution is not the test — a Branch survives it. Wire the path regardless: a Stop communicates an intended stopping point, while a dangling shape reads as an oversight and, on a multi-path shape, hides a dropped branch.
+
+Where a shape has several outcomes, each needs its own target — see `BOOMI_THINKING.md` § Converging Outcomes for why they must not share one.
+
+### Detection
+
+Scan process XML before pushing it. Any shape with an empty `<dragpoints/>` whose `shapetype` is not one of the four terminals is a defect:
+
+```bash
+awk 'match($0,/shapetype="[^"]+"/){t=substr($0,RSTART+11,RLENGTH-12)} /<dragpoints\/>/{if(t!~/^(stop|exception|returndocuments|doccacheload)$/)print FNR": "t}' process.xml
+```
+
+Any output is a defect. Two formatting limits: the shape's `shapetype` must appear on an earlier line than its `<dragpoints/>`, and an empty element written `<dragpoints></dragpoints>` or `<dragpoints />` is not matched. Format the document one element per line before scanning it.
+
+### Related
+
+- `BOOMI_THINKING.md` § Dragpoints and Output Path Wiring — the authoring rule
+- `references/steps/stop_step.md`, `references/steps/exception_step.md`, `references/steps/return_documents_step.md`, `references/steps/document_cache_steps.md` (Add to Cache only) — the four terminals
+- Issues #30, #36 and #40 are the sibling pattern: deploy-clean XML that fails only at execution
 
 ---

@@ -33,7 +33,7 @@ Context-specific behavior stays in the step docs: quote escaping (`references/st
 </parametervalue>
 ```
 
-- `key` — arbitrary configuration-time identifier, **ignored at runtime**. The GUI writes a 0-based sequence (`key="0"`, `key="1"`, …); gaps from GUI deletions are fine; element order is what matters.
+- `key` — configuration-time identifier, **ignored at request time**; element order is what matters. The GUI writes a 0-based sequence (`key="0"`, `key="1"`, …), and gaps from GUI deletions are fine. Ignored is not the same as optional: in a Set Properties `<sourcevalues>` group the attribute is required at design time — omit it there and the shape cannot be opened in the platform UI, while the push and the execution both still succeed (see `boomi_error_reference.md` Issue #42).
 - `usesEncryption` — the GUI stamps `usesEncryption="false"` on top-level parameters and on nested inputs of `crossref`/`connector` (not on nested inputs of `sql`/`documentcache`).
 
 ## Substitution and Evaluation

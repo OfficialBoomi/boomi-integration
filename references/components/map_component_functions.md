@@ -13,6 +13,7 @@
   - Properties — Get/Set Dynamic Process Property, Get/Set Document Property, Set Trading Partner, Get/Set Process Property
   - String — trims, Append/Prepend, Concat, Replace/Remove, To Lower/Upper, Split
   - User-Defined
+- Expressing a Conditional
 - Complete Working Example
 - Key Observations
 
@@ -111,6 +112,8 @@ Any function input can carry a default value stored as a `default="…"` attribu
 ```
 
 The default is applied whenever the input's **effective value is empty** — either the input is not wired from any source, or it is mapped from a source that resolves to empty. A non-empty mapped value takes precedence and the default is ignored. (Same `empty → default` trigger as the map-level `<Defaults>` element, but stored per function input.)
+
+**A present-but-empty source and an omitted source are not equivalent here.** With a default on the port, a source element present with no content applies the default, while a source element **absent** from the document produces no target field at all. Without a default — an absent `default` attribute and `default=""` behave identically — the two produce identical output: no target field either way.
 
 ### Parameter Data Types
 
@@ -1047,9 +1050,25 @@ String manipulation — trimming, append/prepend, concatenation, search-and-repl
 
 **Empty result → absent target field.** When any String function's result is empty (e.g. `LeftTrim` of an empty value, `WhitespaceTrim` of an all-whitespace value), the map writes **no** target field — the element is absent from the output, not `""`. This is the same absent-not-empty behavior called out for String Split underflow below.
 
+**This applies only at the map's target boundary, not mid-chain.** Inside a User-Defined Function, an empty intermediate value is an ordinary empty string: it propagates to the next step normally and neither suppresses nor aborts the chain. A `String Concat` receiving an empty input still emits that input's delimiters (see String Concat below).
+
+**Leading and trailing whitespace is trimmed on the target write**, whatever produced the value — see § Target Write Behavior in `map_component.md`. A `String Replace` replacement or `String Append` fill that supplies a separator as a leading or trailing space loses it; move the separator inside the value or add it downstream.
+
 #### Left Character Trim (`LeftTrim`) / Right Character Trim (`RightTrim`)
 
 Fix the value to `Fix to Length` characters by discarding from one side: `LeftTrim` discards from the **left** (retains the rightmost N), `RightTrim` discards from the **right** (retains the leftmost N). **When the input is shorter than `Fix to Length`, the value is returned unchanged** — no padding, no fill, no error.
+
+`Fix to Length` behaves in five meaningfully different ways:
+
+| `Fix to Length` | Behavior |
+|---|---|
+| larger than the input length | value returned unchanged |
+| `0` | result is empty — **`0` is not "no limit"**; it retains zero characters |
+| empty effective value, port carrying no `default` | result is empty, no error |
+| empty effective value, port carrying a `default` | the default is used as the length (see Input Default Values) |
+| non-numeric (e.g. `N`) | **`java.lang.NumberFormatException` — the document fails** |
+
+The non-numeric row is the sharp edge: a `Fix to Length` wired from data that might not be a number will kill the document at execution, not degrade gracefully. The `0` and no-default-empty rows are what make the gate in "Expressing a Conditional" work — which is why a gate's `Fix to Length` port must not carry a `default`.
 
 ```xml
 <FunctionStep cacheEnabled="true" cacheOption="none" category="String" key="1"
@@ -1132,11 +1151,13 @@ Join the input ports **in port order**, inserting `delimiter` between adjacent i
 </FunctionStep>
 ```
 
-Example: inputs `A`,`B`,`C` with `delimiter="-"` → `A-B-C`; empty delimiter → `ABC`; `delimiter="-" fixedLength="3"` → `A-B`. An empty input keeps its position (both delimiters are still emitted): `A`,``,`C` with `delimiter="-"` → `A--C`.
+Example: inputs `A`,`B`,`C` with `delimiter="-"` → `A-B-C`; empty delimiter → `ABC`; `delimiter="-" fixedLength="3"` → `A-B`. An empty input keeps its position (both delimiters are still emitted): `A`,``,`C` with `delimiter="-"` → `A--C`. With an **empty delimiter**, empty inputs therefore contribute nothing and leave no artifact: `A`,``,`C` → `AC`. That property is what lets a Concat merge mutually-exclusive gated values (see "Expressing a Conditional").
+
+**No practical ceiling on input ports.** The binding constraint is component payload size and GUI practicality, not a port cap.
 
 #### String Replace (`StringReplace`) / String Remove (`StringRemove`)
 
-Search `Original String` for `String to Search` (Replace) / `String to Remove` (Remove). **The search parameter is a regular expression, and the operation applies to all matches**, not just the first. Replace substitutes each match with `String to Replace`; Remove deletes each match. A plain literal is a valid (degenerate) regex.
+Search `Original String` for `String to Search` (Replace) / `String to Remove` (Remove). **The search parameter is a Java regular expression** (`java.util.regex.Pattern` syntax), **and the operation applies to all matches**, not just the first. Replace substitutes each match with `String to Replace`; Remove deletes each match. A plain literal is a valid (degenerate) regex.
 
 ```xml
 <FunctionStep cacheEnabled="true" cacheOption="none" category="String" key="7"
@@ -1153,6 +1174,30 @@ Search `Original String` for `String to Search` (Replace) / `String to Remove` (
 ```
 
 `StringRemove` is identical but for `type="StringRemove"` and drops the third input (only `Original String` + `String to Remove`). Examples: Replace `abc123def` search `[0-9]+` replace `#` → `abc#def`; Replace `x-y-z` search `-` replace `_` → `x_y_z` (all matches); Remove `a1b2c3` remove `[0-9]` → `abc`.
+
+**Capture groups and backreferences both work.** Groups capture, `$1`…`$n` in `String to Replace` interpolate them, and `\1`…`\n` inside the pattern are backreferences to an earlier group:
+
+| Original | Search | Replace | Result |
+| --- | --- | --- | --- |
+| `AAA` | `^(.+)$` | `[$1]` | `[AAA]` |
+| `1111` | `^(\d)\1*$` | `BLANKED` | `BLANKED` |
+| `1234` | `^(\d)\1*$` | `BLANKED` | `1234` — no match |
+| `a1b2c3` | `[0-9]+` | `#` | `a#b#c#` — every match |
+
+**A non-matching input is returned unchanged**, not emptied. An anchored pattern (`^…$`) replaces once, not repeatedly.
+
+**Writing a pattern in XML.** Both parameters are usually unwired ports, so their values sit in an `<Input>` `default` attribute and XML attribute escaping is the only escaping in play: write `\` verbatim (`\d`, `\1`, `\p{Alpha}` — **do not double the backslash**), write `$` verbatim, and write `"` as `&quot;`, `&` as `&amp;`, and `<` as `&lt;` (escaping `&` to `&amp;` therefore needs `&amp;amp;` in the attribute).
+
+**Emitting a field only when the source is populated.** Wrapping a value in boilerplate is a single function, with no risk of the boilerplate appearing around nothing. Mapping source element `val` through the function to target element `outA`:
+
+| Original (`val`) | Search | Replace | Target `outA` |
+| --- | --- | --- | --- |
+| `AAA` | `^(.+)$` | `[$1]` | `<outA>[AAA]</outA>` |
+| present, empty | `^(.+)$` | `[$1]` | **absent** |
+
+**The pattern is not what suppresses the target field.** `^(.*)$`, which matches an empty string, produces the same absent `outA` — so choosing `+` over `*` is not what makes this safe. An empty effective input yields an empty result whatever the pattern, and that is the **Empty result → absent target field** behavior above doing the work.
+
+The one configuration that changes it is a **non-empty `default` on the `Original String` port**: with `default="ZZZ"`, a present-but-empty source yields `<outA>[ZZZ]</outA>` — the boilerplate wrapped around the default. Leave that port's default empty, the same hazard called out for the gate's `Fix to Length` port under "Expressing a Conditional".
 
 #### String Split (`StringSplit`)
 
@@ -1201,6 +1246,54 @@ A map consumes a UDF as a `FunctionStep` with `category="userdefined"` and `type
 - A side-effect-only UDF (empty `<Outputs/>`) is mapped input-only, with no output mapping at all. A UDF fires only when at least one of its interface ports — input or output — is wired; a userdefined FunctionStep with no mappings touching it is silently inert.
 - UDF references coexist with standard function steps in the same `<Functions>` list.
 - A UDF must never reference another UDF — the API accepts it but execution fails at process initialization. Do not attempt to chain standard functions directly in the map as a substitute either; see "Never Chain One Function Directly Into Another" above.
+
+## Expressing a Conditional
+
+A field that should appear only sometimes, or a target that takes one of two source fields depending on the data, is a conditional. There is no if/then, comparison, or boolean function in the catalogue — but Scripting is still not required. Reach for it only after both options below are ruled out.
+
+### Selecting a Value From a Key — Use a Lookup
+
+When the condition is "this input value means that output value", a lookup **is** the conditional. Use **Simple Lookup** for a map-local table, **Cross Reference Lookup** for a table shared across maps. No chain, no UDF, one step.
+
+This covers most real conditionals (`US` → `United States`, status code → label). Exhaust it first.
+
+### Gating and If/Then/Else — The Fix to Length Gate
+
+When the field must be **suppressed** rather than translated, or the branches select between two *source fields* rather than literals, chain a lookup into a `LeftTrim` whose `Fix to Length` the lookup supplies:
+
+```
+flag ──→ Cross Reference Lookup ──→ 9999 (open) or 0 (shut)
+                                      │
+value ────────────────────────────────┴──→ Left Character Trim ──→ value, or nothing
+```
+
+`9999` exceeds any realistic field length, so the value is returned unchanged; `0` retains zero characters, so the result is empty and **the target element is absent from the output**. Both behaviors are in the `Fix to Length` table under Left Character Trim above.
+
+**The gate's `Fix to Length` port must carry `default=""` or no `default` attribute at all.** A default is applied whenever the port's effective value is empty, and a lookup miss leaves it empty — so a stray default turns a shut gate into a partial-value leak. Gating `ABCDEFG` against a table holding `Y` → `9999`:
+
+| Gate `default` | `flag` | Lookup | Target element |
+|---|---|---|---|
+| `""` | `X` | miss | absent — gate shut |
+| `"3"` | `X` | miss | `EFG` — rightmost 3 characters leak |
+| `"3"` | `Y` | hit, `9999` | `ABCDEFG` — the looked-up length overrides the default |
+
+The third row is why a stray default survives testing: the same misconfigured gate produces correct output for every recognized flag, and leaks only on an unrecognized one.
+
+For **if/then/else**, run two gates off one lookup with inverted length columns and join them with a `String Concat` whose `delimiter` is empty. Exactly one gate is open, the shut one contributes nothing, and the surviving value passes through clean.
+
+The whole chain must live in **one User-Defined Function** — a plain map forbids wiring one function into another, and a UDF may not reference another UDF.
+
+**Two-way select.** Build a `crossref` table with columns `FlagKey`/`LenA`/`LenB` and rows `Y`→`9999`,`0` and `N`→`0`,`9999`. One `CrossRefLookup` reads both length columns from the flag; each gate trims its own value to one of them; a `StringConcat` with `delimiter=""` merges the two gate results.
+
+Each gate's `Fix to Length` takes its own length column — `LenA` to gate A, `LenB` to gate B. Crossing them pushes cleanly and selects the wrong branch at execution.
+
+### Sharp Edges
+
+- **An unrecognized flag fails closed and silently** — the gate shuts and the field vanishes with no error anywhere. Validate the flag upstream if an unrecognized value must be caught, and keep the port's `default` empty (see the table above).
+- **Never let a non-numeric value reach `Fix to Length`.** It throws `NumberFormatException` and fails the document. This is why the lookup approach is safer than deriving the length with a `StringReplace` regex: a pattern that fails to normalize every possible input turns the gate into a document-killer.
+- **A shut gate suppresses the target element, not the document.** Whether a map emits a document is decided by the presence of the mapped *source* element, not by what reaches the target. The source is present, so the mapping is satisfied and the map still emits a document — with the gated field absent. A map whose every field is gated shut emits an empty document, not a map error. See Issue #41 in `references/guides/boomi_error_reference.md` for what does produce zero documents.
+- **Inside a UDF the gate needs `CrossRefLookup`** — Simple Lookup is map-only; see Simple Lookup above.
+- Prefer `skipLookupIfNoInputs="true"` — see Cross Reference Lookup above for what `"false"` does to an empty flag.
 
 ## Complete Working Example
 

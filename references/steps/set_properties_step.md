@@ -94,7 +94,7 @@ To construct the `propertyId`, use `definedprocess.[componentId]@[propertyKey]` 
                        propertyId="[dynamicdocument.NAME | process.NAME | mime.HEADER | connector.TYPE.PROP | definedprocess.ID@KEY]" 
                        shouldEncrypt="false">
         <sourcevalues>
-          <parametervalue key="[sequence]" valueType="[type]">
+          <parametervalue key="[required — 0-based sequence]" valueType="[type]">
             <!-- Value configuration based on type -->
           </parametervalue>
         </sourcevalues>
@@ -111,17 +111,17 @@ To construct the `propertyId`, use `definedprocess.[componentId]@[propertyKey]` 
 **Multiple source values concatenate in XML element order** to build the final property value:
 ```xml
 <sourcevalues>
-  <parametervalue key="1" valueType="static">
+  <parametervalue key="0" valueType="static">
     <staticparameter staticproperty="/user/"/>
   </parametervalue>
-  <parametervalue key="2" valueType="track">
+  <parametervalue key="1" valueType="track">
     <trackparameter defaultValue="" propertyId="dynamicdocument.DDP_USERNAME"/>
   </parametervalue>
 </sourcevalues>
 <!-- Result: "/user/" + DDP_USERNAME value -->
 ```
 
-**The `key` attribute is ignored at runtime** - it's a GUI-assigned identifier that persists through edits. Element order determines concatenation sequence.
+**The `key` attribute is REQUIRED on every source value, but is ignored at request time** - element order determines concatenation sequence, not `key`. Omit it and the shape becomes un-editable in the platform UI: the push and the execution both succeed, but the configuration dialog silently never opens. Write a 0-based sequence within each `<sourcevalues>` group. See `references/guides/boomi_error_reference.md` Issue #42.
 
 ## Source Value Types
 
@@ -154,7 +154,7 @@ Set Properties-specific notes:
                        name="Dynamic Document Property - DDP_USERNAME" persist="false" 
                        propertyId="dynamicdocument.DDP_USERNAME" shouldEncrypt="false">
         <sourcevalues>
-          <parametervalue key="5" valueType="static">
+          <parametervalue key="0" valueType="static">
             <staticparameter staticproperty="ccapp"/>
           </parametervalue>
         </sourcevalues>
@@ -163,7 +163,7 @@ Set Properties-specific notes:
                        name="Dynamic Document Property - DDP_EXAMPLE_DATETIME_PROP" persist="false" 
                        propertyId="dynamicdocument.DDP_EXAMPLE_DATETIME_PROP" shouldEncrypt="false">
         <sourcevalues>
-          <parametervalue key="6" valueType="date">
+          <parametervalue key="0" valueType="date">
             <dateparameter dateparametertype="current" datetimemask="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"/>
           </parametervalue>
         </sourcevalues>
@@ -185,10 +185,10 @@ Set Properties-specific notes:
                        name="Dynamic Document Property - DDP_PATH" persist="false" 
                        propertyId="dynamicdocument.DDP_PATH" shouldEncrypt="false">
         <sourcevalues>
-          <parametervalue key="1" valueType="static">
+          <parametervalue key="0" valueType="static">
             <staticparameter staticproperty="/user/"/>
           </parametervalue>
-          <parametervalue key="2" valueType="track">
+          <parametervalue key="1" valueType="track">
             <trackparameter defaultValue="" propertyId="dynamicdocument.DDP_USERNAME" 
                           propertyName="Dynamic Document Property - DDP_USERNAME"/>
           </parametervalue>
@@ -211,14 +211,14 @@ Set Properties-specific notes:
                        name="Dynamic Process Property - DPP_SAMPLE_PROCESS_PROP" persist="false" 
                        propertyId="process.DPP_SAMPLE_PROCESS_PROP" shouldEncrypt="false">
         <sourcevalues>
-          <parametervalue key="7" valueType="profile">
+          <parametervalue key="0" valueType="profile">
             <profileelement elementId="6" elementName="lastName (Root/Object/lastName)" 
                           profileId="75c5b9ff-7e48-40f5-91e7-a4703caa86df" profileType="profile.json"/>
           </parametervalue>
-          <parametervalue key="8" valueType="static">
+          <parametervalue key="1" valueType="static">
             <staticparameter staticproperty=", "/>
           </parametervalue>
-          <parametervalue key="6" valueType="profile">
+          <parametervalue key="2" valueType="profile">
             <profileelement elementId="5" elementName="firstName (Root/Object/firstName)" 
                           profileId="75c5b9ff-7e48-40f5-91e7-a4703caa86df" profileType="profile.json"/>
           </parametervalue>

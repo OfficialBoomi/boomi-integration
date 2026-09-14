@@ -6,6 +6,7 @@
 - Component Structure
 - Default Values
 - Datetime Field Mapping
+- Target Write Behavior
 - Map Generation Rules
 - Mapping Patterns
 - Instance Identifier and Qualifier Mappings
@@ -149,6 +150,19 @@ When profile fields have `dataType="datetime"`, Boomi's internal datetime pipeli
 | character | datetime | Yes Date Format function must output date mask of `yyyyMMdd HHmmss.SSS` |
 | datetime | datetime | Yes (auto-conversion) |
 | datetime | character | Yes Date Format function must have an input mask of `yyyyMMdd HHmmss.SSS`|
+
+## Target Write Behavior
+
+Rules that apply as a value is written to a target element, whatever produced it — a function chain, or a direct field mapping with no function in the map at all.
+
+**Edge whitespace is trimmed.** Leading and trailing whitespace on the value is removed as it is written to a character target element; interior whitespace is preserved (`␣` marks a literal space):
+
+| Source value | Target value |
+|---|---|
+| `␣␣AAA␣␣` | `AAA` |
+| `[␣␣AAA␣␣]` | `[␣␣AAA␣␣]` |
+
+A separator or pad that must survive cannot be whitespace at either end of the value. This covers spaces written to an XML character target element; tabs, newlines, and non-XML target profiles are outside its scope.
 
 ## Map Generation Rules
 
@@ -364,6 +378,8 @@ Functions come in two types:
 
 - **Standard functions** — single-step built-in operations spanning these categories: Connector, Custom Scripting, Date, Language, Lookup, Numeric, Properties, and String.
 - **User-Defined functions** — reusable, standalone components (`type="transform.function"`) that chain multiple standard function steps together in a defined sequence.
+
+There is no if/then, comparison, or boolean function, but conditional logic does not require Scripting — see "Expressing a Conditional" in references/components/map_component_functions.md.
 
 See references/components/map_component_functions.md for comprehensive function documentation, and references/components/user_defined_function_component.md for authoring User-Defined Function components.
 

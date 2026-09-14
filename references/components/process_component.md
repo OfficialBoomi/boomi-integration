@@ -16,6 +16,7 @@
 | Branch | `numBranches="N"` | `<branch numBranches="2"/>` | GUI blank canvas error |
 | Data Process (Custom Scripting) | `language` (e.g. `groovy2`) | `<dataprocessscript language="groovy2" useCache="true">` | Runtime null script engine error (missing `language`; `useCache` is an optional performance flag) |
 | WSS Start | `actionType="Listen"` | `<connectoraction actionType="Listen"...>` | Listener doesn't activate |
+| Find Changes | `profileType` ∈ `{ff, db, xml}` | `<changedatacapture profileType="xml" ...>` | HTTP 400 `cvc-enumeration-valid` on push if an out-of-enum value (e.g. `json`) is used |
 
 ## Process Options
 

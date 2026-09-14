@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.0.64
+
+- Restrict empty `<dragpoints/>` to Stop, Exception, Return Documents, Add to Cache
+- Define `toShape="unset"` as a placeholder, not a connection
+- Add error reference entry for a dangling shape that deploys clean and fails at execution
+
+
+## 1.0.63
+
+- Add custom-curl and auth-error steering to `SKILL.md`
+- Point to the `boomi-marketplace` skill as a resource
+
+
+## 1.0.62
+
+- Require `key` on every Set Properties source value — a keyless one leaves the shape un-editable in the platform UI
+- Note that a GUI save does not repair keyless parameters in untouched shapes
+- Add error reference entry for a Set Properties shape that will not open in the GUI
+
+
+## 1.0.61
+
+- Shape notes: count characters against the ~300 limit before writing
+
+
+## 1.0.60
+
+- Document the String Replace search parameter as a Java regex: capture groups, `$1` in the replacement, in-pattern backreferences, anchors
+- Document XML attribute escaping for a pattern written in an `<Input>` `default`
+- Document non-matching input returned unchanged
+- Document leading and trailing whitespace trimmed on the map's write to a character target element
+- Add the "emit a field only when the source is populated" idiom
+- Document present-but-empty versus absent source on a defaulted function input
+- Add a behavior table for the gate's `Fix to Length` default hazard
+
+
+## 1.0.59
+
+- Add Find Changes (Change Data Capture) step reference
+
+
+## 1.0.58
+
+- Document how to express a conditional in a map without Scripting
+- Document Fix to Length behavior for Left/Right Character Trim
+- Clarify that an empty result suppresses a target field only at the map boundary
+- Note that a suppressed target field does not fail the map
+- Note String Concat has no practical input-port ceiling
+
+
 ## 1.0.57
 
 - Document what causes a repeating target element to be created in a map

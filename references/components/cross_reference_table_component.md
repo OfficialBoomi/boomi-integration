@@ -203,7 +203,7 @@ Cross reference lookups can be used anywhere a parameter value is accepted via `
                   propertyId="dynamicdocument.DDP_EMAIL"
                   shouldEncrypt="false">
   <sourcevalues>
-    <parametervalue key="1" usesEncryption="false" valueType="crossref">
+    <parametervalue key="0" usesEncryption="false" valueType="crossref">
       <crossrefparameter crossRefTableId="{CROSSREF_COMPONENT_ID}"
                          outputParamId="3" outputParamName="email">
         <inputs>

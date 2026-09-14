@@ -69,7 +69,7 @@ Set before the CREATE step using Set Properties:
 <documentproperty name="Thru MFT — Partner Connector - FileName"
     propertyId="connector.thru-8SHH0W-thrumf-technology.fileName">
   <sourcevalues>
-    <parametervalue valueType="static">
+    <parametervalue key="0" valueType="static">
       <staticparameter staticproperty="output.txt"/>
     </parametervalue>
   </sourcevalues>
