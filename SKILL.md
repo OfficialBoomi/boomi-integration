@@ -37,10 +37,10 @@ If the `boomi-marketplace` skill is available, it can search a portfolio of Boom
 - **REST API on Advanced atom**: api_service_component.md + web_services_server_start_shape_operation.md + process_component.md + api_conversion_patterns.md
 - **Map transformations**: map_component.md + map_component_functions.md + source/target profile docs
 - **Event Streams**: event_streams_connection + operation + steps + platform_entities/event_streams.md
-- **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md + platform_entities/edi_b2b.md
+- **B2B/EDI Trading Partners**: trading_partner_component.md + trading_partner_steps.md + edi_profile_component.md (+ hl7_profile_component.md for HL7 v2) + platform_entities/edi_b2b.md
 - **Find Changes (CDC)**: steps/find_changes_step.md + matching profile doc (flat_file_profile_component.md / xml_profile_component.md / database_profile_component.md) + process_component.md + BOOMI_THINKING.md (Converging Outcomes)
 - **Disk V2 (File System)**: diskv2_connection_component + diskv2_connector_operation_component + diskv2_connector_step
-- **MFT (Managed File Transfer)**: mft_connection_component + mft_connector_operation_component + mft_connector_step
+- **MFT (Managed File Transfer)**: mft_v2_connection_component + mft_v2_connector_operation_component + mft_v2_connector_step. For existing `connectorType="thru-8SHH0W-thrumf-technology"` (Legacy) assets, see mft_connection_component + mft_connector_operation_component + mft_connector_step instead
 - **Mail (IMAP) — Email send/receive/move**: mail_imap_connection_component + mail_imap_connector_operation_component + mail_imap_connector_step + (document_cache_component for attachments). For existing `connectorType="mail"` assets, see mail_component.md instead
 - **MCP Server (AI Tool Exposure)**: mcp_server_connection_component + mcp_server_operation_component + mcp_server_start_step + platform_entities/mcp_server.md
 - **Data Hub (MDM)**: datahub_connector_operation_component + connector_step + BOOMI_THINKING.md. The paired connection is bootstrapped by the `boomi-datahub` skill (`datahub-connection.sh bootstrap connector`), not built in the UI
@@ -121,6 +121,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── xml_profile_component.md          # Use when: defining XML document schemas with namespaces, accessing XML elements/attributes in Maps/Set Properties
 │   │   ├── flat_file_profile_component.md    # Use when: defining CSV/delimited file schemas, creating placeholder profiles for Map component sources
 │   │   ├── edi_profile_component.md          # Use when: defining EDI document schemas, troubleshooting EDI parsing failures, understanding Boomi-specific EDI configuration. Includes Transaction Set ID → GS-01 mapping and HIPAA GS-08 Implementation Convention codes.
+│   │   ├── hl7_profile_component.md          # Use when: building or editing an HL7 v2 EDI profile (`standard="hl7"`) - Header-only structure, CR terminator, the compId composite model and expansion, write path and escaping, the repeating-field data-loss trap, version differences. Read with edi_profile_component.md.
 │   │   ├── database_profile_component.md     # type: "profile.db". Use when: defining request/response structure for the Database (Legacy) connector - SQL statements, stored procedures, dynamic vs standard insert/update/delete, result-set columns. NOT for Database V2 (which uses JSON profiles).
 │   │   ├── map_component.md                  # Use when: creating field-to-field transformations between profiles, understanding map generation rules and mapping patterns
 │   │   ├── map_component_functions.md        # Use when: applying transformations within maps - string manipulation, date formatting, numeric/math, lookups (cross reference, simple, document cache, SQL), connector calls, custom scripting, and process/document property get-set
@@ -149,8 +150,10 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── custom_connector_operation_component.md # Use when: creating operations for custom SDK connectors - subType selects the connector build, operationType/customOperationType contract, per-document field overrides. Not the REST operation template
 │   │   ├── diskv2_connection_component.md       # connectorType: "disk-sdk". Use when: creating Disk V2 connections - local/network file system access, directory configuration, cloud runtime restrictions
 │   │   ├── diskv2_connector_operation_component.md # Use when: defining Disk V2 operations - file CREATE/UPSERT/GET/QUERY/LIST/DELETE/LISTEN, filters, actionIfFileExists, directory overrides
-│   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology". Use when: creating MFT connections - Thru MFT partner connector credentials
-│   │   ├── mft_connector_operation_component.md # Use when: defining MFT operations - file pickup, drop-off, status updates
+│   │   ├── mft_v2_connection_component.md      # connectorType: "officialboomi-X3979C-manage-prod" — Boomi Managed File Transfer. Use when: creating MFT connections - OAuth 2.0 client credentials from a Boomi MFT Connector endpoint
+│   │   ├── mft_v2_connector_operation_component.md # connectorType: "officialboomi-X3979C-manage-prod". Use when: defining MFT List/Get/Create operations - File Metadata vs File (with content) List (content List consumes files), Get ID input, File ID filter, file name, per-action tracked properties
+│   │   ├── mft_connection_component.md         # connectorType: "thru-8SHH0W-thrumf-technology" — Boomi Managed File Transfer (Legacy). Use when: working with existing Legacy MFT assets - Thru partner connector credentials. NOT Boomi Managed File Transfer (SDK)
+│   │   ├── mft_connector_operation_component.md # Legacy MFT. Use when: working with existing Legacy MFT operations - file pickup, drop-off, status updates. NOT Boomi Managed File Transfer (SDK)
 │   │   ├── mail_imap_connection_component.md   # connectorType: "mailsdk". Use when: creating Mail (IMAP) connections - SMTP outbound + IMAP inbound, Basic Auth or OAuth 2.0, connection security (NONE/SSL_TLS/STARTTLS)
 │   │   ├── mail_imap_connector_operation_component.md # Use when: defining Mail (IMAP) operations - Receive (query with filters, attachment cache), Send (with attachments via cache), Move (folder-to-folder with request profile)
 │   │   ├── mail_component.md                 # connectorType: "mail" — Mail (legacy, SMTP send + POP3 get). Use when: working with existing Mail assets or when the user explicitly requests Mail. Never choose over Mail (IMAP) on agent judgment alone. NOT Mail (IMAP)
@@ -175,7 +178,8 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── boomi_for_sap_step.md    # Boomi for SAP operations. Use when: querying Core-exposed SAP objects with JSON responses, runtime parameter binding for SAP filters
 │   │   ├── custom_connector_step.md # Custom SDK connectors. Use when: using connectors built with Boomi's Java Connector SDK
 │   │   ├── diskv2_connector_step.md # Disk V2 file operations. Use when: reading, writing, querying, listing, or deleting files on local/network file systems
-│   │   ├── mft_connector_step.md    # MFT operations. Use when: picking up or dropping off files via Boomi MFT (Thru)
+│   │   ├── mft_v2_connector_step.md # connectorType: "officialboomi-X3979C-manage-prod" — Boomi Managed File Transfer. Use when: listing, downloading, or uploading files via Boomi MFT - List as Start, Get ID from fileId, per-document File Name override
+│   │   ├── mft_connector_step.md    # connectorType: "thru-8SHH0W-thrumf-technology" — Legacy MFT. Use when: working with existing Legacy MFT steps (Thru). NOT Boomi Managed File Transfer (SDK)
 │   │   ├── mail_imap_connector_step.md # Mail (IMAP) connector step. Use when: sending email via SMTP, receiving email via IMAP (with attachment handling), or moving messages between mailbox folders (for `connectorType="mail"`: see components/mail_component.md)
 │   │   ├── event_streams_steps.md   # Event Streams operations. Use when: pub/sub messaging, event-driven processing, async communication between processes
 │   │   ├── agent_step.md            # AI Agent step. Use when: integrating Agent Control Tower agents into processes, or sending files to an agent for extraction/review
@@ -204,7 +208,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   └── shape_notes.md       # Canvas annotations visible in GUI, one per shape, ~300 character hard limit each (count them, do not eyeball). Use when: user explicitly requests adding documentation notes to process shapes
 │   │
 │   └── platform_entities/       # Platform service configuration and management
-│       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, transaction pair dependencies, X12↔EDIFACT equivalence, validation, communication connectors
+│       ├── edi_b2b.md           # B2B/EDI architecture, trading partner concepts, supported standards, acknowledgment flows, transaction pair dependencies, X12↔EDIFACT equivalence, validation, communication connectors. Use when: orienting on B2B/EDI concepts before building trading partner components or processes
 │       ├── event_streams.md     # Topics, subscriptions, dead-letter queues, and GraphQL entity management
 │       ├── boomi_for_sap.md     # Boomi for SAP architecture, scope boundaries, JSON-formatted SAP integration via Core module
 │       ├── flow.md              # Boomi Flow integration: FSS deployment workflow, Flow Service components, multi-platform development (build Integration first, then Flow)
@@ -481,6 +485,8 @@ bash <skill-path>/scripts/boomi-component-push.sh subprocess.xml
 bash <skill-path>/scripts/boomi-deploy.sh subprocess.xml  # Required for standalone execution
 bash <skill-path>/scripts/boomi-test-execute.sh --process-id <subprocess-guid>
 ```
+
+**Exception — Process Route:** its subprocesses are not bundled with the parent; deploy the changed component itself. See `references/steps/process_route_step.md`.
 
 See `references/guides/boomi_error_reference.md` Issue #3 for details.
 

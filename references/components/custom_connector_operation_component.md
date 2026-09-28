@@ -121,9 +121,7 @@ A QUERY operation's field selection lives in `<Options><QueryOptions>`. `Connect
 
 A bare `<ConnectorObject name="…"/>` with no `<FieldList>` selects nothing — `getSelectedFields()` comes back empty. Nested fields use path names (`address/city`).
 
-An empty `<Options/>` on a QUERY operation is also accepted and executes normally; what differs between the two is whether field selection is configured, not whether the operation runs. Prefer importing a QUERY operation through the GUI wizard and pulling it — the wizard enumerates the connector's fields, which is tedious to reproduce by hand.
-
-Filter values for a connector QUERY come from the **process step**, not from this component; the step-level filter shape is not documented here.
+A QUERY operation is not fully API-authorable. Its filter is configured on the **process step**, not on this component, and the step-level filter shape is not documented here. A step without one fails at execution with `ConnectorException: Could not unmarshall query filter`, whether the operation carries an empty `<Options/>` or a populated `<QueryOptions>` — `<Options>` governs field selection only. Configure the QUERY operation and its step filter in the GUI, then pull the operation and process.
 
 ## Named Custom Actions
 

@@ -200,7 +200,7 @@ Check for error keywords using wildcard pattern:
 
 ## Common Gotchas
 
-1. **Unconnected False Path**: Always connect both dragpoints, even if false goes to stop
+1. **Unconnected False Path**: Always connect both dragpoints, even if false goes to stop. See error reference Issue #43
 2. **Type Mismatches**: Comparing "100" (string) with 100 (number) may not work as expected
 3. **Date Format Mismatches**: Ensure both dates use same format/mask
 4. **Regex Escaping**: Remember to escape special regex characters

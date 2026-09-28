@@ -151,7 +151,7 @@ Standard-specific partner settings. The child element depends on the `standard` 
 | `envelopeoption` | enum | - | `groupall`, `groupfg`, `groupst` | Outbound envelope grouping |
 | `fileDelimiter` | string | - | `stardelimited`, etc. | Element delimiter |
 | `fileDelimiterSpecial` | string | - | - | Custom delimiter character |
-| `segmentchar` | string | - | `newline`, `tilde`, etc. | Segment terminator |
+| `segmentchar` | string | - | `tilde`, `carriagereturn`, etc. | Segment terminator — prefer an explicit byte over `newline`, see `edi_profile_component.md` § EdiSegmentChar Enum |
 | `segmentcharSpecial` | string | - | - | Custom segment terminator |
 | `allowduplicates` | boolean | - | - | Allow duplicate documents |
 | `rejectDuplicateInterchange` | boolean | false | - | Reject duplicate ISA control numbers |

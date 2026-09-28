@@ -40,7 +40,7 @@ Creates an empty document - used for scheduled or manual processes without incom
 
 #### Process-Level Configuration for No Data
 ```xml
-<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="true" workload="general">
+<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="true" workload="general">
 ```
 - **updateRunDates="true"**: Scheduled processes benefit from run date tracking for incremental pulls.
 
@@ -60,7 +60,7 @@ Receives documents from parent process call - used for subprocesses. When run st
 
 #### Process-Level Configuration for Data Passthrough
 ```xml
-<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="false" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
 ```
 - **updateRunDates="false"**: Subprocesses don't need independent run date tracking.
 
@@ -93,7 +93,7 @@ Listens for incoming web service calls - the process acts as an API endpoint.
 #### Process-Level Configuration for WSS
 When using WSS, the process element typically includes:
 ```xml
-<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
 ```
 - **allowSimultaneous="true"**: Allows multiple simultaneous executions (important for APIs)
 
@@ -103,7 +103,7 @@ See `components/process_component.md` for the full decision table of recommended
 Disk V2 file-watching processes use a connector start shape with `actionType="LISTEN"` and `connectorType="disk-sdk"`. See `components/diskv2_connector_operation_component.md` - LISTEN Operation for the full operation config and start shape XML.
 
 ### 5. Trading Partner Start Configuration
-B2B/EDI processes use a Trading Partner Start shape with `<tradingpartneraction actionType="Listen">`. See `steps/trading_partner_steps.md` for full reference.
+B2B/EDI processes use a Trading Partner Start shape: `shapetype="start"` wrapping a `<tradingpartneraction actionType="get">` element. See `steps/trading_partner_steps.md` for full reference.
 
 ## Common Patterns
 - Position at left side of canvas (typical x="48.0" or x="96.0")

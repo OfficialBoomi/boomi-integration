@@ -1,5 +1,70 @@
 # Changelog
 
+## 1.0.75
+
+- Document where EDI profile validation rules are enforced.
+- Declare `xmlns:xsi` in the EDI profile template.
+
+
+## 1.0.74
+
+- Exempt Process Route subprocesses from the redeploy-parent rule
+
+
+## 1.0.73
+
+- Connection test queries component metadata instead of runtimes and reports the account ID
+- Connection test reports the effective sub-account when running against a partner account
+
+
+## 1.0.72
+
+- Add `hl7_profile_component.md` — HL7 v2 EDI profile reference
+- Document the repeating-field composite-expansion data-loss trap
+- Correct `EdiHL7Options` semantics and repeating-segment `tagLists` guidance
+- Move HL7 MSH guidance into the HL7 reference
+
+
+## 1.0.71
+
+- Document all four Split Documents profile types (Flat File, XML, EDI, JSON)
+- EDI profiles bind data elements by profile order, not by the numeric suffix in the element name
+
+
+## 1.0.70
+
+- Add Boomi Managed File Transfer (SDK) connector references: connection, List/Get/Create operations, step; mark Thru-based MFT docs as Legacy
+
+
+## 1.0.69
+
+- Default `stopProcessingIfZeroDocuments="true"` in all process-options snippets; document that an omitted attribute is stored as `true` on create but `false` on update
+
+
+## 1.0.68
+
+- Use explicit placeholder notation for the JDBC URL in the Database v2 connection reference
+
+
+## 1.0.67
+
+- A custom connector QUERY fails without a GUI-configured step filter.
+
+
+## 1.0.66
+
+- Correct Trading Partner Start/Send shape configuration and output-path routing
+- Add X12 inbound failure-class routing
+- Document unwired output paths and invalid dragpoint identifiers as silent data loss
+
+
+## 1.0.65
+
+- Wrap every `EdiSegment` in a root `EdiLoop isContainer="true"` — a bare-root profile is uneditable
+- Regenerating a map's `<Mappings>` is destructive
+- Prefer an explicit `segmentchar` over `newline`
+
+
 ## 1.0.64
 
 - Restrict empty `<dragpoints/>` to Stop, Exception, Return Documents, Add to Cache

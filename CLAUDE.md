@@ -27,3 +27,18 @@ Credentials must not reach the command line, a child process environment, or a s
 ## Skill VERSION files
 
 Versioning is performed by Boomi CI/CD pipelines and is tracked in the VERSION file for each skill (e.g. `skills/boomi-integration/VERSION`). Agents MUST NOT modify `VERSION` files.
+
+## HL7 v2 profiles — unsettled areas
+
+`references/components/hl7_profile_component.md` deliberately omits the following. Do not add
+content covering them without a runtime toggle test:
+
+- Segment-keyed `elementKey` inside a *nested* loop, and `parentListKey` with a segment-keyed
+  TagList.
+- Whether `~` repeats are reachable outside `EdiDataElement` attributes (a loop wrap, an
+  instance identifier, a `tagList`), and whether repeats can be generated on write.
+- Decoding of the `\R\`, `\T\`, `\F\`, `\E\` escapes on read.
+- `mandatory` on a loop, as distinct from on a segment or an element.
+- Whether an under-modeled `&`-level sub-composite discards its tail as the `^` level does.
+- `composite="startsubstart"` — a sub-composite that is also its composite's first component.
+- Whether `loopRepeat="999"` is a hard cap, and whether `-1` is accepted on an HL7 group loop.

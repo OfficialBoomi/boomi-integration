@@ -24,7 +24,7 @@
   </bns:encryptedValues>
   <bns:object>
     <GenericConnectionConfig>
-      <field id="url" type="string" value="jdbc:mysql://host:port/database"/>
+      <field id="url" type="string" value="jdbc:mysql://{host}:{port}/{database}"/>
       <field id="className" type="string" value="com.mysql.jdbc.Driver"/>
       <field id="username" type="string" value="username"/>
       <field id="password" type="password" value="plaintext_or_encrypted"/>
@@ -54,7 +54,7 @@
 ## Required Fields
 
 ### Core Connection
-- `url`: Full JDBC connection string (`jdbc:protocol://host:port/database`)
+- `url`: Full JDBC connection string (`jdbc:protocol://{host}:{port}/{database}`)
 - `className`: JDBC driver class name (database-specific)
 - `username`: Database username
 - `password`: Plain text for new connections, encrypted hex for pulled components

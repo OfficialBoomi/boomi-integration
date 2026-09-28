@@ -74,6 +74,7 @@ The process component containing an MCP Start Step should have these attributes:
   enableUserLog="true"
   processLogOnErrorOnly="false"
   purgeDataImmediately="false"
+  stopProcessingIfZeroDocuments="true"
   updateRunDates="false"
   workload="general">
   <!-- shapes here -->

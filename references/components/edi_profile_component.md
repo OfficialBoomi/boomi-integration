@@ -13,6 +13,7 @@
 - Standard-Specific Options
 - Element Hierarchy
 - EdiLoop Attributes
+- Every Segment Must Live Inside a Root Container
 - Hierarchical Nesting for Parent-Child Output
 - EdiSegment Attributes
 - EdiDataElement Attributes
@@ -22,6 +23,7 @@
 - Instance Identifiers and Qualifiers
 - Key Numbering Strategy
 - Required Attributes Checklist
+- Repeating Segments Must Be Wrapped in Loops
 - Critical: Segment Terminator Mismatch
 
 ## Component Type
@@ -35,6 +37,7 @@ Defining EDI document schemas for parsing inbound EDI or generating outbound EDI
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <bns:Component xmlns:bns="http://api.platform.boomi.com/"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                componentId="" name="EDI_Profile_Name" type="profile.edi" folderId="{FOLDER_ID}">
   <bns:encryptedValues/>
   <bns:object>
@@ -50,7 +53,7 @@ Defining EDI document schemas for parsing inbound EDI or generating outbound EDI
         </EdiOptions>
       </ProfileProperties>
       <DataElements>
-        <!-- EdiLoop, EdiSegment, and EdiDataElement hierarchy -->
+        <!-- Root EdiLoop containers only; every EdiSegment nests inside one -->
       </DataElements>
     </EdiProfile>
   </bns:object>
@@ -79,7 +82,7 @@ ProfileProperties contains three required child elements:
 | Attribute | Type | Default | Purpose |
 |-----------|------|---------|---------|
 | `standard` | enum | - | EDI standard type (see table below) |
-| `conditionalValidationEnabled` | boolean | - | Enable conditional validation rules |
+| `conditionalValidationEnabled` | boolean | - | Enforce segment validation rules (see Validation Rules) |
 | `description` | string | - | Profile description |
 | `modelVersion` | int | 1 | Internal model version |
 | `disableEscape` | boolean | false | Disable escape character handling |
@@ -189,12 +192,14 @@ For `segmentchar`:
 
 | Value | Character |
 |-------|-----------|
-| `newline` | LF (\n) |
+| `newline` | Host platform line separator — **not a fixed byte**, see below |
 | `singlequote` | ' |
 | `tilde` | ~ |
 | `carriagereturn` | CR (\r) |
 | `bytecharacter` | Custom byte value |
 | `othercharacter` | Custom (requires segmentcharSpecial) |
+
+**Prefer an explicit terminator over `newline`.** `carriagereturn`, `tilde` and `singlequote` each denote one unambiguous byte. `newline` can resolve to the host platform's line separator — LF on a Linux-hosted runtime, CRLF on Windows — so a profile that parses on a cloud runtime can return empty fields on a local Windows runtime given identical components and data. Use `carriagereturn` for HL7, which is what HL7 v2 mandates.
 
 ### EdiDataOptions
 
@@ -273,17 +278,17 @@ EDIFACT ORDERS profile example:
 ### EdiHL7Options
 
 ```xml
-<EdiHL7Options messageType="ADT" version="2.5" messageCode="A01" eventType="A01" messageStructure="ADT_A01"/>
+<EdiHL7Options description="ADT/ACK - Admit/visit notification" eventType="A01"
+               messageCode="ADT" messageStructure="ADT_A01" messageType="ADT_A01"
+               version="v251"/>
 ```
 
-| Attribute | Type | Purpose |
-|-----------|------|---------|
-| `messageType` | string | HL7 message type |
-| `version` | string | Version number |
-| `messageCode` | string | Message code |
-| `eventType` | string | Trigger event |
-| `messageStructure` | string | Message structure ID |
-| `description` | string | Description |
+**`messageType` holds the message structure, not the message code** — the same value as
+`messageStructure`. `messageCode` is the 3-character code (`ADT`); inverting the two is the
+most common hand-authoring error.
+
+HL7 diverges from X12/EDIFACT in structure, delimiters, composite modeling and attribute
+surface. Read `hl7_profile_component.md` before building or editing an HL7 profile.
 
 ### EdiOdetteOptions
 
@@ -389,7 +394,7 @@ HIPAA-covered profiles require the full Implementation Convention reference in `
 ## EdiLoop Attributes
 
 ```xml
-<!-- X12 profiles use three root containers — all other nodes start at key=4 -->
+<!-- X12/EDIFACT convention: three root containers — all other nodes start at key=4 -->
 <EdiLoop key="1" name="Header" loopId="1" loopRepeat="1" loopingOption="unique" isContainer="true" isNode="true">
   <!-- Header-level segments and loops (ST, BEG, REF, N1, etc.) -->
 </EdiLoop>
@@ -426,6 +431,27 @@ HIPAA-covered profiles require the full Implementation Convention reference in `
 ```
 cvc-enumeration-valid: Value 'implicit' is not facet-valid with respect to
 enumeration '[unique, occurrence]'.
+```
+
+## Every Segment Must Live Inside a Root Container
+
+**No `EdiSegment` may be a direct child of `<DataElements>`.** Every segment nests inside an `EdiLoop` with `isContainer="true"`, under every standard — `x12`, `edifact`, `hl7`, `userdef` alike.
+
+A bare-root profile is accepted by the API, stored verbatim, and parses normally at execution. It fails only at design time, and totally: the Data Elements tab renders the empty "Getting Started" state, and any map using the profile shows a blank pane on whichever side it sits — source or target, with the opposing JSON/XML profile rendering fine. Push, deploy and execution all succeed silently.
+
+The stored data is intact and API-authored mappings keep working, but the profile and every map built on it are **uneditable**, permanently, with nothing to signal it. Opening the profile offers an import wizard that overwrites the component.
+
+**Root container naming is free.** A single `EdiLoop` named anything with `isContainer="true"` is enough. The Header/Detail/Summary trio is the X12/EDIFACT convention, not a universal requirement.
+
+**HL7 structure**: HL7 has no Header/Detail/Summary envelope of its own; wrap the segments in one root loop and omit Detail/Summary.
+
+```xml
+<DataElements>
+  <EdiLoop key="1" name="Header" loopId="1" loopRepeat="1" loopingOption="unique"
+           isContainer="true" isNode="true">
+    <!-- MSH, EVN, PID, PV1 ... all nested here -->
+  </EdiLoop>
+</DataElements>
 ```
 
 ## Hierarchical Nesting for Parent-Child Output
@@ -584,6 +610,10 @@ The same principle applies at the loop level. When an entire loop repeats with d
   </DataFormat>
 </EdiDataElement>
 ```
+
+### Element Positions Are Sequential, Not Name-Derived
+
+A profile binds data elements **in the order the profile lists them**, not by the numeric suffix in the element name. A profile listing `BEG01, BEG02, BEG03, BEG05` expects four consecutive data elements in the segment — supplying an empty placeholder for the skipped `BEG04` shifts every later value one position left and drops the last one, with no error.
 
 ### Child Element Ordering
 
@@ -782,6 +812,12 @@ Segments can include validation rules that define conditional field requirements
   </validationRules>
 </EdiSegment>
 ```
+
+`xsi:type` needs `xmlns:xsi` declared on the `bns:Component` root; without it the push fails with a generic HTTP 400 "Unable to read message body".
+
+Rules take effect only with `conditionalValidationEnabled="true"`. Maps ignore them whether the profile is the source or the target.
+
+For X12, Trading Partner Start routes a violation (e.g. an `ifFirstAll` rule's required element missing) down Documents with a 997 `AK5*E` — see `steps/trading_partner_steps.md` § X12 Inbound Failure Classes. For X12, Trading Partner Send ignores violations by default; with the document type's `outboundTSValidation="true"`, it routes a violating document to Errors without sending it — see `steps/trading_partner_steps.md` § Output Paths (Send Shape).
 
 ## Composites and Sub-Composites
 
@@ -1107,6 +1143,9 @@ Missing required attributes cause validation failures on push. Ensure each eleme
 - `key`, `name`, `dataType`, `length`, `minLength`, `maxLength`, `mandatory`, `isMappable`, `isNode`
 - For `datapositioned`: also requires `startColumn`
 
+**Structure:**
+- Every `EdiSegment` sits inside an `EdiLoop` with `isContainer="true"`. Schema validation passes either way; this one fails only in the editor.
+
 ## Schema Validation Rules (HTTP 400 Prevention)
 
 The platform API schema validator rejects the following. Each rule corresponds to a 400 error returned on push.
@@ -1142,22 +1181,6 @@ The platform API schema validator rejects the following. Each rule corresponds t
 
 <!-- N0, N2 (implied decimal) -->
 <DataFormat><ProfileNumberFormat numberFormat="" impliedDecimal="0" signedField="false"/></DataFormat>
-```
-
-### Single-Segment Loops Must Be Wrapped
-
-Every repeating segment group must be a named `EdiLoop`. Single-segment qualifier-driven repeats (REF, DTM, PER, SAC, TD5, and any segment that repeats with different qualifier values) MUST be wrapped in their own named `EdiLoop` even though they contain only one segment. Bare repeating segments have no loop key, so `tagLists` cannot reference them.
-
-```xml
-<!-- WRONG — bare segment, tagLists cannot reference it -->
-<EdiSegment name="REF" maxUse="-1" loopingOption="unique" .../>
-
-<!-- CORRECT — named loop wraps the segment; tagLists can use elementKey="90" -->
-<EdiLoop key="90" name="REF" loopId="REF" loopRepeat="-1" loopingOption="occurrence" isNode="true">
-  <EdiSegment key="91" name="REF" maxUse="1" loopingOption="unique" ...>
-    ...
-  </EdiSegment>
-</EdiLoop>
 ```
 
 ### HL Hierarchy Auto-Generation Pattern
@@ -1215,6 +1238,24 @@ Applies equally to N1, REF, DTM, SAC, PER, TD5, SLN, LM, NAD, RFF, and any other
 
 **tagLists completeness:** Include all standard qualifier values for each element, not just values visible in the sample data. The profile must handle values that may arrive in production even if not seen during build.
 
+## Repeating Segments Must Be Wrapped in Loops
+
+Every repeating segment group MUST be wrapped in its own named `EdiLoop`, with `tagLists` keyed on the loop — including single-segment qualifier-driven repeats (REF, DTM, PER, SAC, TD5, and any segment repeating with different qualifier values).
+
+A bare repeating segment *can* be referenced by its own segment key and routes correctly while it has no sibling segments in scope. That is not a reason to skip the wrap: once a sibling exists in the same scope, a segment-keyed `elementKey` splits the output into one document per instance and silently drops the sibling data (Issue #22 — see § Instance Identifiers and Qualifiers). A segment left uncontained at the root also leaves the profile uneditable in the UI (see § Every Segment Must Live Inside a Root Container).
+
+```xml
+<!-- WRONG — bare segment; a segment-keyed elementKey breaks once a sibling exists -->
+<EdiSegment name="REF" maxUse="-1" loopingOption="unique" .../>
+
+<!-- CORRECT — named loop wraps the segment; tagLists key the loop with elementKey="90" -->
+<EdiLoop key="90" name="REF" loopId="REF" loopRepeat="-1" loopingOption="occurrence" isNode="true">
+  <EdiSegment key="91" name="REF" maxUse="1" loopingOption="unique" ...>
+    ...
+  </EdiSegment>
+</EdiLoop>
+```
+
 ## Critical: Segment Terminator Mismatch
 
 **Symptom:** Silent data loss - Map executes without errors but output contains only default/unmapped values. No field values are extracted from the EDI source. The map produces structural output with defaults, masking the parsing failure.
@@ -1239,5 +1280,3 @@ ISA*00*...*>~GS*QM*USIT*...~ST*214*0001~
 ```
 
 **Detection:** If output contains record structure but all mapped field values are missing/default, verify segmentchar matches your data format.
-
-**Validated:** Process `59bf6e30-78c7-46fb-a36c-b8fbba012651` with profile `2d3f82b1-7bf5-4274-bf9e-6c042bc9e4cf`. Identical components, only test data format changed. Newline-separated data produced full output; tilde-terminated data produced defaults only. No error was thrown.

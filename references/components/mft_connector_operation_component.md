@@ -14,6 +14,8 @@ MFT operation components define specific actions for file pickup, drop-off, and 
 
 **Connector Type**: `thru-8SHH0W-thrumf-technology`
 
+This is the Boomi Managed File Transfer (Legacy) connector. For new builds use the SDK-based connector (`officialboomi-X3979C-manage-prod`) — see `mft_v2_connector_operation_component.md`.
+
 ## Operation Types
 
 | Action | Object Type | Request | Response | Purpose |

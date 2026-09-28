@@ -13,6 +13,8 @@ MFT (Managed File Transfer) connection components store credentials for Boomi's 
 
 **Connector Type**: `thru-8SHH0W-thrumf-technology`
 
+This is the Boomi Managed File Transfer (Legacy) connector. For new builds use the SDK-based connector (`officialboomi-X3979C-manage-prod`) — see `mft_v2_connection_component.md`.
+
 ## Component Structure
 
 ```xml

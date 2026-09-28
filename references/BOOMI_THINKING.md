@@ -16,7 +16,7 @@ This guide covers Boomi's core mental models and development philosophy.
 - Development Workflow Principles
 - Critical Deployment Pattern
 - Profile Type Selection: Flat File vs EDI Profile
-- EDI Profile Design Mental Models (X12 and EDIFACT)
+- EDI Profile Design Mental Models
 - Platform Services Awareness
 
 ## Core Mental Models
@@ -267,11 +267,9 @@ Error handling with dual paths: Try for normal processing, Catch for errors. Pla
 ### Dragpoints and Output Path Wiring
 The `<dragpoints>` element is **required** on every shape — omitting it causes a schema validation failure. An empty `<dragpoints/>` declares no outgoing connections. That is only correct on the four shapes that never pass documents to a downstream shape: Stop, Exception, Return Documents, Add to Cache.
 
-**Every other shape should have a wired path.** A Stop step communicates an intended stopping point; a dangling shape reads as an oversight — and, depending on the shape, fails at execution or silently drops a branch despite a clean push and deploy (see error reference Issue #43).
+**Every other shape should have every outcome wired** — on a multi-path shape (TP Start, TP Send, Decision, Try/Catch, Branch), each path, not just one. A Stop step is the minimum target and communicates an intended stopping point; a dangling path reads as an oversight — and, depending on the shape, fails at execution or silently drops documents despite a clean push and deploy (see error reference Issue #43).
 
-`<dragpoint>` children represent wired connections via `toShape="shapeN"`. A path with no target is written `toShape="unset"` — the conventional representation, preserved exactly by the platform. It is a placeholder, not a connection: an unset path has no target and nothing runs down it. The GUI renders available output paths based on shapetype and configuration, independent of what `<dragpoint>` children exist in the XML.
-
-Multi-path shapes (TP Send, Decision, Try/Catch, Branch) support partial wiring at the API level — some paths wired, others unset. Nothing at push or deploy distinguishes a path left unset by oversight from one left unset by intent.
+`<dragpoint>` children represent wired connections via `toShape="shapeN"`. A path left unwired in the GUI is written `toShape="unset"` — a convention for human readers, not a platform concept. `toShape` is never validated or normalized, so `unset` and a typo'd target are stored verbatim across an API round trip. On a multi-path shape, those two and an omitted `<dragpoint>` are equivalent: all three deploy clean and then **silently discard** any document routed down the path — COMPLETE execution status, no error. A single-output shape with no dragpoint fails at execution instead (see error reference Issue #43 for both cases and the per-shape logging difference).
 
 **Dragpoint `x`/`y` are cosmetic.** They survive an API round trip exactly as authored, but they do not control the path a connector line takes, and the GUI regenerates return-path dragpoint coordinates from the target step's position the first time the process is opened and saved there — no human edit required. Do not rely on any dragpoint coordinate as a layout mechanism. Connector lines are routed orthogonally — horizontal and vertical segments only, never diagonal — and each outcome's label is drawn at the **target** end of its line, immediately before the target step. A step's own `x`/`y` is the only geometry worth authoring carefully.
 
@@ -347,6 +345,9 @@ Key patterns that fail silently without errors:
 - **Map fan-in to a repeating element**: two mappings from non-repeating source fields to the same repeating target key collapse into one instance, last-write-wins — the earlier value is discarded and execution reports COMPLETE. Use `toTagListKey` to route each mapping to its own instance
 - **Target hierarchy that doesn't mirror the source**: a nested source array mapped to sibling repeating target elements flattens — every value survives, so nothing looks wrong, but the parent-child grouping is gone. Nest the target profile to match the source
 - **Split output shape**: Split Documents keeps the parent wrapper (JSON and XML) — a Set Properties or Route key written for a bare element reads empty, no error
+- **Split `splitOption`**: Always write it — omitted, a flat file split falls back to split-by-profile and fails only at execution, and an ordinary GUI mode switch reaches the same state. `split_line` can also carry an orphaned `profileId`, so never infer the sub-mode from profile attributes. See error reference Issue #46
+- **Split `batchCount` silently ignored**: For XML and JSON, honored only when no peer elements sit along the path to the split element — otherwise discarded with no error. See `steps/data_process_step.md`
+- **Split header loss**: Only `headersOption="retain"` is safe when a downstream step parses split output against a `useColumnHeaders="true"` profile; the other values silently drop data rows, or raise an error naming the *map*, never the split. See `steps/data_process_step.md`
 - **Process Route reference prefix**: A `processRouteId` missing the `resource::rout:` prefix is accepted on push and deploy, failing only at execution
 - **XML schema mistakes**: Common validation errors
 
@@ -431,9 +432,15 @@ Flat file profiles cannot express that record B belongs to record A - they produ
 - Complex proprietary formats (TMW, mainframe formats)
 - Any format requiring hierarchical record relationships
 
-## EDI Profile Design Mental Models (X12 and EDIFACT)
+## EDI Profile Design Mental Models
 
-This section applies for EDI profile work. For segment-level structure and code lists, consult the trading partner's implementation guide / companion document and a sample transaction. For transaction-set routing facts (GS-01 codes, HIPAA GS-08 Implementation Convention references) see `components/edi_profile_component.md` § Transaction Set ID Reference. For the XML mechanics of qualifier-driven routing (tagLists, composite sub-element references, segment-level filters), see `components/edi_profile_component.md`.
+### Segments Live Inside Containers — Every Standard
+
+An `EdiSegment` must never be a direct child of `<DataElements>`. Wrap segments in a root `EdiLoop isContainer="true"` in every EDI profile, whatever the standard — a bare-root profile pushes, deploys and runs correctly, but is permanently uneditable. See `components/edi_profile_component.md` § Every Segment Must Live Inside a Root Container.
+
+### Standard-Specific Guidance (X12 and EDIFACT)
+
+The rest of this section applies for EDI profile work. For segment-level structure and code lists, consult the trading partner's implementation guide / companion document and a sample transaction. For transaction-set routing facts (GS-01 codes, HIPAA GS-08 Implementation Convention references) see `components/edi_profile_component.md` § Transaction Set ID Reference. For the XML mechanics of qualifier-driven routing (tagLists, composite sub-element references, segment-level filters), see `components/edi_profile_component.md`.
 
 ### Correlation Keys: Extract Early
 

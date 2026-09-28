@@ -8,6 +8,7 @@
 - Datetime Field Mapping
 - Target Write Behavior
 - Map Generation Rules
+- Regenerating a Mappings Block Is Destructive
 - Mapping Patterns
 - Instance Identifier and Qualifier Mappings
 - Observed Patterns
@@ -199,6 +200,19 @@ A separator or pad that must survive cannot be whitespace at either end of the v
 <!-- Only generate mappings for leaf data fields: -->
 <Mapping fromKey="9" fromType="profile" toKey="..." toType="profile"/>  
 ```
+
+## Regenerating a Mappings Block Is Destructive
+
+Rewriting `<Mappings>` wholesale replaces every mapping. The platform stores exactly what is pushed — it does not compare against the prior version, warn on a reduced count, or discard mappings on its own. An omitted mapping is simply gone, and the map still executes, emitting its surviving mappings plus defaults with nothing to distinguish that from a mapping never authored.
+
+**Before overwriting an existing map's `<Mappings>`, pull the current version and compare mapping counts.** Fewer profile-sourced mappings than the version being replaced is a regression until proven otherwise.
+
+```bash
+bash <skill-path>/scripts/boomi-component-pull.sh --component-id <map-guid>
+grep -c "<Mapping " active-development/transform.map/<Map_Name>.xml
+```
+
+This matters most when the profile on one side cannot be rendered (see `edi_profile_component.md` § Every Segment Must Live Inside a Root Container): regeneration working from what the editor shows drops every mapping referencing that side.
 
 ## Mapping Patterns
 

@@ -58,7 +58,7 @@ Used as a Start step to listen for messages from an Event Streams subscription.
 
 When using Event Streams Listen as a start step, the process element should include:
 ```xml
-<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" updateRunDates="false" workload="general">
+<process allowSimultaneous="true" enableUserLog="false" processLogOnErrorOnly="false" purgeDataImmediately="false" stopProcessingIfZeroDocuments="true" updateRunDates="false" workload="general">
 ```
 - **allowSimultaneous="true"**: Allows multiple concurrent event deliveries to be processed.
 - **updateRunDates="false"**: Event-driven processes should not track run dates (performance cost per execution).

@@ -9,6 +9,7 @@
 - REMINDER Quote Escaping Rules (CRITICAL)
 - Common Patterns
 - Message Step Properties
+- Carriage Returns in a Payload (HL7 and other CR-terminated formats)
 - Reference XML Examples
 - TROUBLESHOOTING QUOTE ESCAPING ISSUES
 
@@ -190,6 +191,20 @@ Message steps can create documents with or without content:
 - **Empty message** (`<msgTxt/>`): Clears inherited content, creates empty document
 - **Static content**: Pure text with no variables
 - **Dynamic content**: Template with {N} variable substitution
+
+## Carriage Returns in a Payload (HL7 and other CR-terminated formats)
+
+**A literal carriage return cannot be written into `<msgTxt>`** — XML line-ending normalization turns it into LF before the runtime sees it. **Use the numeric character reference `&#13;`**, which is expanded after normalization.
+
+```xml
+<msgTxt>MSH|^~\&amp;|SENDAPP|SENDFAC|RECVAPP|RECVFAC|20260129120000||ADT^A08|MSG00001|P|2.4&#13;EVN||20260129120000&#13;PID|1||MRN12345||Doe^John^A||19850315|M</msgTxt>
+```
+
+The platform re-serialises the stored CR as `&#xD;` — the hex spelling of the same codepoint. `&#13;` in, `&#xD;` out; both are U+000D and both round-trip. Do not treat the changed spelling on pull as a corruption.
+
+Pairing `segmentchar="carriagereturn"` with an LF-terminated payload fails **silently**: status COMPLETE, no error, and the whole payload parses as one segment, so only the first segment's fields populate. Those values still look correct, so verify against a field from the second or third segment. The process log renders CR and LF identically as a space and cannot diagnose this — compare the stored bytes.
+
+This applies only to payloads authored in component XML. Data arriving from a connector or file never passes through XML escaping.
 
 ## Reference XML Examples
 

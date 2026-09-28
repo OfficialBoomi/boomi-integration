@@ -66,6 +66,7 @@ When using FSS, the process element should include:
          enableUserLog="false"
          processLogOnErrorOnly="false"
          purgeDataImmediately="false"
+         stopProcessingIfZeroDocuments="true"
          updateRunDates="false"
          workload="general">
 ```
@@ -90,6 +91,7 @@ See `components/process_component.md` for the full decision table of recommended
              enableUserLog="false"
              processLogOnErrorOnly="false"
              purgeDataImmediately="false"
+             stopProcessingIfZeroDocuments="true"
              updateRunDates="false"
              workload="general">
       <shapes>

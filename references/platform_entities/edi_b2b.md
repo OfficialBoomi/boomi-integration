@@ -5,7 +5,7 @@
 - Architecture
 - Supported EDI Standards
 - Trading Partner Components
-- Trading Partner Start/End Shapes
+- Trading Partner Start/Send Shapes
 - Acknowledgment Flows
 - Document Processing Paths
 - Instance Identifiers
@@ -36,11 +36,11 @@ B2B/EDI Architecture:
 │   └── See: components/edi_profile_component.md
 ├── Process Integration
 │   ├── Trading Partner Start (receives/validates documents)
-│   │   ├── Documents path (valid documents)
-│   │   ├── Errors path (failed validation)
+│   │   ├── Documents path (accepted documents)
 │   │   ├── Acknowledgments path (generated acks)
+│   │   ├── Errors path (rejected documents)
 │   │   └── Archive path (custom archiving)
-│   └── Trading Partner End (generates envelopes/acknowledgments)
+│   └── Trading Partner Send (generates envelopes/acknowledgments, then transmits)
 └── Communication Connectors (Transport layer)
     ├── AS2 (with MDN receipts)
     ├── MLLP (healthcare)
@@ -95,7 +95,7 @@ Trading Partner components define the configuration for EDI document exchange wi
 | HTTP | Web-based | REST/web service integration |
 | Disk | Local/network file system | Directory-based exchange |
 
-## Trading Partner Start/End Shapes
+## Trading Partner Start/Send Shapes
 
 These process shapes handle EDI document processing within Boomi processes.
 
@@ -105,13 +105,15 @@ Receives and validates inbound EDI documents.
 **Output Paths:**
 | Path | Purpose |
 |------|---------|
-| Documents | Valid documents for processing |
-| Errors | Documents that failed validation |
+| Documents | Accepted documents, including those that validated with errors |
 | Acknowledgments | Generated acknowledgment documents |
+| Errors | Rejected documents — routing varies by failure class and standard |
 | Archive | For custom archiving logic |
 
-### Trading Partner End
-Generates EDI envelopes and acknowledgments for outbound documents.
+### Trading Partner Send
+Generates EDI envelopes and acknowledgments for outbound documents and sends them via the partner's configured communication method. Successfully sent documents end their branch here.
+
+Both shapes require a wired Errors path — see `steps/trading_partner_steps.md`.
 
 ## Acknowledgment Flows
 
@@ -154,15 +156,17 @@ When scaffolding a process around a received transaction, plan routes for the ex
 
 ### Inbound Processing
 1. Document received via communication connector
-2. Trading Partner Start validates against EDI profile
-3. Valid documents route to Documents path
-4. Invalid documents route to Errors path
+2. Trading Partner Start parses and validates against EDI profile
+3. Parsed documents route to Documents or Errors; the split is standard-specific
+4. X12 documents that fail to parse reach no path and error the execution
 5. Acknowledgments generated and route to Acknowledgments path
 6. Optional custom archiving via Archive path
 
+Failure-class routing and per-standard differences: `steps/trading_partner_steps.md`.
+
 ### Outbound Processing
 1. Documents mapped/transformed in process
-2. Trading Partner End generates EDI envelopes
+2. Trading Partner Send generates EDI envelopes
 3. Control numbers auto-generated (ISA, GS, ST for X12)
 4. Documents sent via configured communication method
 

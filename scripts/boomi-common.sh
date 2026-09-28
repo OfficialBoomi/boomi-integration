@@ -936,7 +936,7 @@ stamp_origin_file() {
 
 test_connection() {
   local url
-  url="$(build_api_url "Atom/query" false)"
+  url="$(build_api_url "ComponentMetadata/query" false)"
   echo "Testing connection to Boomi platform..."
 
   local http_code
@@ -944,11 +944,15 @@ test_connection() {
     -X POST "$url" \
     -H "Accept: application/json" \
     -H "Content-Type: application/json" \
-    -d '{"QueryFilter":{}}')
+    -d '{"QueryFilter":{"expression":{"operator":"EQUALS","property":"componentId","argument":["00000000-0000-0000-0000-000000000000"]}}}')
 
   if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
     echo "Connection successful"
-    echo "Authenticated as: ${BOOMI_USERNAME}"
+    local acct="${BOOMI_ACCOUNT_ID}"
+    if [[ "${PARTNER_OVERRIDE:-}" == "true" && -n "${PARTNER_SUB_ACCOUNT:-}" ]]; then
+      acct="${PARTNER_SUB_ACCOUNT} (via partner account ${BOOMI_ACCOUNT_ID})"
+    fi
+    echo "Authenticated to ${acct} as: ${BOOMI_USERNAME}"
   else
     echo "ERROR: Connection failed (HTTP ${http_code})" >&2
     exit 1

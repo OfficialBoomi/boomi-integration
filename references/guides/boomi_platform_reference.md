@@ -71,11 +71,11 @@ Boomi offers three API management solutions addressing different needs:
 **Development workflow**: Verify Core is installed and services exposed, then the agent builds connection/operation components and Integration processes. SAP returns JSON responses for use in Maps, Set Properties, and downstream processing.
 
 ### Managed File Transfer (MFT)
-**What it does**: Cloud-native managed file transfer platform (powered by Thru Inc.) providing secure, scalable file exchange with monitoring, audit trails, and partner self-management.
+**What it does**: Cloud-native managed file transfer platform providing secure, scalable file exchange with monitoring, audit trails, and partner self-management.
 **When to suggest**: High-volume file transfers, B2B file exchange with partners, transfer monitoring/replay needs, separation of file exchange from data processing.
-**Scope**: Partially programmatic - connector components (connections, operations, steps) are fully buildable; MFT portal configuration (flows, endpoints, organizations) requires MFT GUI.
-**Integration touchpoint**: MFT connector steps in Integration processes pick up files (GET) or drop off files (CREATE) via MFT API.
-**Development workflow**: Configure flows and endpoints in MFT portal first, then build connection/operation components using flow endpoint credentials.
+**Scope**: Partially programmatic - connector components (connections, operations, steps) are fully buildable; MFT portal configuration (organizations, endpoints, flows) is done in the MFT GUI, or through the `boomi-mft` skill where it is installed.
+**Integration touchpoint**: Two connectors, not interchangeable. Boomi Managed File Transfer (`officialboomi-X3979C-manage-prod`) is the SDK-based connector for new builds - List, Get, and Create against a flow endpoint. Boomi Managed File Transfer (Legacy) (`thru-8SHH0W-thrumf-technology`, Thru-powered) covers existing assets - FLOW_PICKUP, FILE_METADATA, and DROP_OFF.
+**Development workflow**: Configure flows and endpoints in the MFT portal first, then build connection/operation components. The SDK connector authenticates with OAuth 2.0 client credentials taken from a Boomi MFT Connector endpoint; its operations target a flow endpoint by numeric ID.
 
 ### B2B/EDI Management
 **What it does**: Trading partner management, EDI document processing, and B2B transaction monitoring.

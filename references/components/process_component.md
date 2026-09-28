@@ -44,13 +44,13 @@ Process options are attributes on the `<process>` XML element, set via the **Pro
 | Data Passthrough (`<passthroughaction/>`) | `false` | `false` | `false` |
 | WSS Listener (`connectorType="wss"`) | `true` | `false` | `false` |
 | FSS Listener (`connectorType="fss"`) | `true` | `false` | `false` |
-| Trading Partner Start (`<tradingpartneraction actionType="Listen">`) | `true` | `false` | `false` |
+| Trading Partner Start (`shapetype="start"` + `<tradingpartneraction>`) | `true` | `false` | `false` |
 | MCP Server (`connectorType="officialboomi-X3979C-mcp-prod"`) | `true` | `false` | `true` |
 | Event Streams Listen (`connectorType="officialboomi-X3979C-events-prod"`) | `true` | `false` | `false` |
 
-These two recommendations follow Boomi's "recommended changes" guidance: turn off Allow Simultaneous Executions for regular-connector/No Data start steps, turn it on for any listener (`actionType="Listen"`) or Trading Partner start; turn off Capture Run Dates for passthrough, listener, and Trading Partner start steps.
+These recommendations follow Boomi's "recommended changes" guidance: turn off Allow Simultaneous Executions for regular-connector/No Data start steps, turn it on for any listener (`actionType="Listen"`) or Trading Partner start; turn off Capture Run Dates for passthrough, listener, and Trading Partner start steps.
 
-**All types**: set `processLogOnErrorOnly="false"`, `purgeDataImmediately="false"`, and `stopProcessingIfZeroDocuments="true"` (the GUI default for new processes — match it when building over the API). Use `workload="general"` unless a listener-only mode (Bridge / Low Latency) is required. These options are set independently of start-step type.
+**All types**: set `processLogOnErrorOnly="false"`, `purgeDataImmediately="false"`, and `stopProcessingIfZeroDocuments="true"` (the GUI default for new processes — match it when building over the API, and include the attribute explicitly). Use `workload="general"` unless a listener-only mode (Bridge / Low Latency) is required. These options are set independently of start-step type.
 
 #### Override Guidance
 
@@ -88,7 +88,11 @@ Purges processed documents and temporary data immediately after each execution. 
 Runtime-level Purge Data Immediately overrides this setting when enabled.
 
 #### `stopProcessingIfZeroDocuments` (Stop if No Documents)
-When `true`, the process halts at a step that produces zero documents rather than continuing downstream. On by default for new processes created in the GUI; processes created or copied via the API may serialize `false`. When building over the API, follow the GUI default of `true`. This applies only to the individual process — it does not propagate to called subprocesses, which must set their own value.
+When `true`, the process halts at a step that produces zero documents rather than continuing downstream. The halt is not an error — the execution completes normally, and the log shows `No documents found. Skipping execution for the <next step> step.` on the step that produced zero documents. When `false`, downstream steps execute with zero documents, including Process Call steps, which still invoke the subprocess.
+
+On by default for new processes created in the GUI. Over the Component API, an omitted attribute is stored as `true` on create but as `false` on update — so an update that leaves it out silently turns the option off. Include `stopProcessingIfZeroDocuments="true"` explicitly on every create and every update.
+
+This applies only to the individual process — it does not propagate to called subprocesses, which follow their own value. A Data Passthrough subprocess invoked with zero documents does not halt at its Start step; its first step still executes, and the subprocess's own setting takes effect at the first step that produces zero documents.
 
 #### `workload` (Process Mode)
 - `general`: Default. Full execution history, logs, and document payloads captured. Works with any start step type.
@@ -151,6 +155,7 @@ Shapes connect through `<dragpoint>` elements within their `<dragpoints>` contai
 - Coordinate convention for clean rendering: dragpoint `x` = target shape's `x` - 16, `y` = target shape's `y` + 8
 - On save the GUI recomputes return-path dragpoint coordinates from the target step's current position using that formula, whether or not any step moved. Do not rely on any dragpoint coordinate as a layout mechanism — express layout intent through the **step's own** `x`/`y`, which is preserved
 - Sequential shapes typically have one dragpoint leading to the next shape
+- Wire every outcome — see `BOOMI_THINKING.md` § Dragpoints and Output Path Wiring
 
 ### Branch Shapes
 Branch shapes support multiple execution paths:
