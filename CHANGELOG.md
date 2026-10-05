@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.76
+
+- Fix `<Process>` casing in MCP Server snippet
+
+
 ## 1.0.75
 
 - Document where EDI profile validation rules are enforced.

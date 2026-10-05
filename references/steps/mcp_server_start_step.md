@@ -69,7 +69,7 @@ The process component containing an MCP Start Step should have these attributes:
 | enableUserLog | `true` | Enable logging |
 
 ```xml
-<Process xmlns=""
+<process xmlns=""
   allowSimultaneous="true"
   enableUserLog="true"
   processLogOnErrorOnly="false"
@@ -78,7 +78,7 @@ The process component containing an MCP Start Step should have these attributes:
   updateRunDates="false"
   workload="general">
   <!-- shapes here -->
-</Process>
+</process>
 ```
 
 See `components/process_component.md` for the full decision table of recommended process options by start step type.
