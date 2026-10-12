@@ -45,6 +45,8 @@ Components reference other components. Think in dependency chains:
 - Process components include steps that reference connection components, connector operation components, map components, profile components, etc. 
 - Connector operation components and map components reference profile components (often an operation and a map and a process will all reference the same profile at different points)
 
+When the user asks what a component depends on or where it is used, run `<skill-path>/scripts/boomi-component-search.sh --related-to <id>`.
+
 You CAN create a process with placeholder steps before the referenced components exist (wireframe approach), but you CANNOT reference profile fields in Set Properties/Maps until the profile component exists.
 
 ## Properties as Variables
@@ -267,9 +269,11 @@ Error handling with dual paths: Try for normal processing, Catch for errors. Pla
 ### Dragpoints and Output Path Wiring
 The `<dragpoints>` element is **required** on every shape — omitting it causes a schema validation failure. An empty `<dragpoints/>` declares no outgoing connections. That is only correct on the four shapes that never pass documents to a downstream shape: Stop, Exception, Return Documents, Add to Cache.
 
-**Every other shape should have every outcome wired** — on a multi-path shape (TP Start, TP Send, Decision, Try/Catch, Branch), each path, not just one. A Stop step is the minimum target and communicates an intended stopping point; a dangling path reads as an oversight — and, depending on the shape, fails at execution or silently drops documents despite a clean push and deploy (see error reference Issue #43).
+**Every other shape must have every outcome wired** — on a multi-path shape (Decision, Try/Catch, TP Start, TP Send, Route, Process Route, Business Rules, Find Changes, Branch), each path its type carries, not just one.
 
-`<dragpoint>` children represent wired connections via `toShape="shapeN"`. A path left unwired in the GUI is written `toShape="unset"` — a convention for human readers, not a platform concept. `toShape` is never validated or normalized, so `unset` and a typo'd target are stored verbatim across an API round trip. On a multi-path shape, those two and an omitted `<dragpoint>` are equivalent: all three deploy clean and then **silently discard** any document routed down the path — COMPLETE execution status, no error. A single-output shape with no dragpoint fails at execution instead (see error reference Issue #43 for both cases and the per-shape logging difference).
+The minimum target is a Stop with `continue="true"`, one per outcome. A dangling path, depending on the shape, fails at execution or silently drops documents despite a clean push and deploy (see error reference Issue #43).
+
+`<dragpoint>` children represent wired connections via `toShape="shapeN"`. A path left unwired in the GUI is written `toShape="unset"` — a convention for human readers, not a platform concept. `toShape` is never validated or normalized, so `unset` and a typo'd target are stored verbatim across an API round trip. On a Decision, Try/Catch or Branch, those two and an omitted `<dragpoint>` are equivalent: all three deploy clean and then **silently discard** any document routed down the path — COMPLETE execution status, no error. A single-output shape with no dragpoint fails at execution instead (see error reference Issue #43 for both cases and the per-shape logging difference).
 
 **Dragpoint `x`/`y` are cosmetic.** They survive an API round trip exactly as authored, but they do not control the path a connector line takes, and the GUI regenerates return-path dragpoint coordinates from the target step's position the first time the process is opened and saved there — no human edit required. Do not rely on any dragpoint coordinate as a layout mechanism. Connector lines are routed orthogonally — horizontal and vertical segments only, never diagonal — and each outcome's label is drawn at the **target** end of its line, immediately before the target step. A step's own `x`/`y` is the only geometry worth authoring carefully.
 

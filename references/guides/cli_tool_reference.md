@@ -23,7 +23,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-component-pull.sh**: Download components from platform to local
 - **boomi-component-diff.sh**: Compare two versions of a component (structured JSON diff)
 - **boomi-version-history.sh**: List component version history
-- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Implicit filters: `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
+- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Other queries implicitly filter `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
 - **boomi-folder-list.sh**: List a folder's child folders (or its whole subtree with `--recursive`) as `id<TAB>fullPath`, also written to `active-development/inventories/folder_list_<timestamp>.json`.
 
 **Deployment & Testing**:
@@ -118,8 +118,10 @@ bash <skill-path>/scripts/boomi-component-search.sh --type connector-settings,co
 # What references this component (and what does it reference)? Each record has a `relation` field
 # ("references" or "referenced-by") to distinguish direction.
 # IMPORTANT: --related-to cannot be combined with other filters.
-bash <skill-path>/scripts/boomi-component-search.sh --related-to <componentId>
+bash <skill-path>/scripts/boomi-component-search.sh --related-to <componentId> [--branch <name|id>]
 ```
+
+`--related-to` returns direct references only; re-invoke on each `componentId` to go deeper. `referenced-by` lists only the current, non-deleted version of each referrer, so a component whose latest version dropped the reference does not appear.
 
 **Folder Discovery** (structure under a parent folder):
 ```bash
@@ -140,8 +142,6 @@ so when same-named folders are in scope, attribute records via `metadata.filters
 (id + `fullPath`), not `folderName`.
 
 **`--type` takes the API-level component type, not the Boomi UI label.** A Boomi "connection" is `connector-settings` (with a `subType` naming the connector); an "operation" is `connector-action`. Other common types: `process`, `transform.map`, `profile.xml`, `profile.json`, `profile.db`, `profile.edi`, `profile.flatfile`, `script.processing`, `webservice`, `flowservice`, `queue`.
-
-Dependency walking: to list all dependencies of a process, call `--related-to <processId>` to find immediate references, then pull any you want to inspect via `boomi-component-pull.sh` and read their `<bns:object>` / `<componentReferences>` for deeper recursion.
 
 **Branch Workflows** (only when user has explicitly opted into Branch & Merge):
 ```bash

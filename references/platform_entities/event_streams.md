@@ -59,7 +59,7 @@ bash <skill-path>/scripts/event-streams-setup.sh query-topic "MyTopic"
 bash <skill-path>/scripts/event-streams-setup.sh create-subscription "MyTopic" "MySubscription"
 
 # Provision an ES connection (creates on platform, pulls back encrypted — no credential exposure)
-bash <skill-path>/scripts/event-streams-setup.sh provision-connection "MyESConnection" "MyToken" "MyFolder"
+bash <skill-path>/scripts/event-streams-setup.sh provision-connection "<connection-name>" "<token-name>" "<folder-id>"
 
 # Produce a test message via REST API (uses first produce-enabled token)
 bash <skill-path>/scripts/event-streams-setup.sh rest-produce "MyTopic" '{"key":"value"}'

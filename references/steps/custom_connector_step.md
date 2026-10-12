@@ -4,6 +4,7 @@
 - Purpose
 - Key Concepts
 - Configuration Structure
+- Parameters: GET and DELETE
 - Required Components
 - Reference XML Example
 - Workflow Considerations
@@ -29,7 +30,7 @@ Custom Connector steps use connectors built with Boomi's Java Connector SDK. The
                     connectorType="[classificationType]"
                     hideSettings="false"
                     operationId="[operation-component-guid]">
-      <parameters/>
+      <!-- see "Parameters: GET and DELETE" below -- a native GET needs a parametervalue here, a native DELETE must not have one -->
       <dynamicProperties/>
     </connectoraction>
   </configuration>
@@ -42,6 +43,30 @@ Custom Connector steps use connectors built with Boomi's Java Connector SDK. The
 `connectorType` should match the Operation component's `subType`, which is what actually selects the connector build that runs — see `boomi_error_reference.md` Issue #38.
 
 Per-document overrides of an operation field go in this shape's `<dynamicProperties>`; see `custom_connector_operation_component.md`.
+
+## Parameters: GET and DELETE
+
+Applies to native SDK GET and DELETE operations (`request.getObjectId()` or `ObjectIdData` iteration), not the REST or OpenAPI-DSL frameworks.
+
+A native GET takes its object id from the step's own `<parametervalue>`, not from the input document:
+
+```xml
+<connectoraction actionType="{customTypeId-or-operationType}" connectionId="{connection-guid}"
+                 connectorType="{connector-type}" operationId="{operation-guid}">
+  <parameters>
+    <parametervalue elementToSetId="0" elementToSetName="ObjectId" key="0" valueType="static">
+      <staticparameter staticproperty="{object-id}"/>
+    </parametervalue>
+  </parameters>
+  <dynamicProperties/>
+</connectoraction>
+```
+
+A single `ObjectId` parameter needs no `parameter-profile` attribute anywhere on the step — the platform does not add one on save or on deploy. With the parameter set, the input document is never read, so its format is irrelevant.
+
+Omit the parameter and the document is dropped: one document in, zero out, green execution, and the connector operation is never entered. An empty `<parameters/>` and no `<parameters>` element at all are indistinguishable at execution time.
+
+**Never reuse this parameter block on a DELETE step.** The same block that GET requires throws at execution time on DELETE — `parameters have been defined but no parameter profile has been configured` — because DELETE routes step parameters through a path that requires a configured parameter profile to interpret them, while GET never calls that path. Push and deploy both succeed either way; only execution reveals the mismatch. A DELETE step with no parameters needs no profile.
 
 ## Required Components
 
@@ -63,7 +88,7 @@ Where the connector descriptor declares `<operation types="EXECUTE">` with no `c
                     connectorType="{classificationType}"
                     hideSettings="false"
                     operationId="{operation-component-guid}">
-      <parameters/>
+      <!-- this EXECUTE operation takes no id parameter -- do not copy this bare <parameters/> for a native GET or DELETE, see "Parameters: GET and DELETE" above -->
       <dynamicProperties/>
     </connectoraction>
   </configuration>

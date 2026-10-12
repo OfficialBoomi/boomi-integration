@@ -400,6 +400,8 @@ Communication configuration varies by method. The structure wraps a `Communicati
 | `mllp` | Minimum Lower Layer Protocol | Healthcare (HL7) |
 | `oftp` | ODETTE File Transfer Protocol 2 | European automotive |
 
+There is no AS4, ebMS, or Peppol method.
+
 ### EdiCommunicationOptionType (`commOption`)
 
 | Value | Description |

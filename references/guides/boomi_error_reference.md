@@ -847,7 +847,7 @@ Before deploying WSS wrapper + subprocess to production:
 
 ### The Problem
 
-Development and testing environments often use self-signed SSL certificates. Python CLI tools and curl commands fail with SSL certificate verification errors when connecting to these environments, despite credentials being correct.
+Development and testing environments often use self-signed SSL certificates. The skill's curl-based CLI tools and manual curl commands fail with SSL certificate verification errors when connecting to these environments, despite credentials being correct.
 
 **Common Scenarios:**
 - Local/custom Boomi instances with self-signed certificates
@@ -856,7 +856,7 @@ Development and testing environments often use self-signed SSL certificates. Pyt
 
 ### Why It Happens
 
-By default, both Python's `requests` library and `curl` refuse to connect to HTTPS endpoints with untrusted or self-signed certificates for security reasons.
+By default, `curl` refuses to connect to HTTPS endpoints with untrusted or self-signed certificates for security reasons.
 
 ### Wrong Pattern - Hard-Coded Insecure Flags
 
@@ -876,15 +876,14 @@ BOOMI_VERIFY_SSL=false        # Platform API SSL verification
 SERVER_VERIFY_SSL=false       # Runtime server SSL verification
 ```
 
-**Python Tools:** All CLI tools automatically respect `BOOMI_VERIFY_SSL` setting:
-```python
-# Handled automatically by tools
-verify_ssl_config = self.config.get('api', {}).get('verify_ssl', 'true')
-self.verify_ssl = str(verify_ssl_config).lower() != 'false'
-response = requests.get(url, verify=self.verify_ssl)
+**Platform API Calls:** `boomi_curl` (in `scripts/boomi-common.sh`) automatically respects `BOOMI_VERIFY_SSL`:
+```bash
+# Handled automatically inside boomi_curl
+[[ "${BOOMI_VERIFY_SSL:-true}" == "false" ]] && ssl_flag="-k"
+curl -s $ssl_flag ...
 ```
 
-**Curl Commands:** Use conditional SSL flag based on SERVER_VERIFY_SSL:
+**Manual Curl Commands (e.g. WSS testing):** Use conditional SSL flag based on SERVER_VERIFY_SSL:
 ```bash
 # SSL verification helper (add -k flag if SERVER_VERIFY_SSL=false)
 SSL_FLAG=$([ "${SERVER_VERIFY_SSL}" = "false" ] && echo "-k" || echo "")
@@ -905,7 +904,7 @@ Two separate settings control SSL verification in different contexts:
 
 **BOOMI_VERIFY_SSL:**
 - Controls: Platform API calls (component pull/push/create, deployments)
-- Used by: All Python CLI tools in `<skill-path>/scripts/` directory
+- Used by: `boomi_curl`/`boomi_api` in `<skill-path>/scripts/boomi-common.sh`, called by all CLI tools in that directory
 - Set to `false` when: Platform API URL uses self-signed certificate
 
 **SERVER_VERIFY_SSL:**

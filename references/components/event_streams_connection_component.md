@@ -59,7 +59,7 @@ bash <skill-path>/scripts/event-streams-setup.sh query-tokens
 
 **Provisioning a connection:** `provision-connection` creates a complete ES connection on the platform and pulls back the encrypted version. The token value is never printed or written to the workspace.
 ```bash
-bash <skill-path>/scripts/event-streams-setup.sh provision-connection "MyESConnection" "MyToken" "MyFolder"
+bash <skill-path>/scripts/event-streams-setup.sh provision-connection "<connection-name>" "<token-name>" "<folder-id>"
 ```
 The command builds the connection XML internally, pushes it to the platform (which encrypts the token), then pulls the encrypted component into `active-development/connector-settings/`. Standard workflow: `query-tokens` or `create-token` → `provision-connection` → use the pulled connection in your process.
 

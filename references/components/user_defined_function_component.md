@@ -138,7 +138,7 @@ A UDF whose x order matches its positions is fully drag-safe. A UDF where they d
 ## Step Types Inside a UDF
 Every standard function type behaves identically inside a UDF as at map level, with the exceptions listed below. Mirror each type's documented map-level XML (ports, `category`/`type`, `<Configuration>`) exactly inside the UDF — see `map_component_functions.md`. Identical behavior includes the stateful machinery:
 
-- The **aggregators** (Running Total, Sum, Count, Line Item Increment) keep their cross-record semantics — grouping per Reset Value, order-sensitive control-break, presence gating, per-row broadcast — exactly as documented at map level. A UDF invocation is not an isolated per-record evaluation context.
+- The **aggregators** (Running Total, Sum, Count, Line Item Increment) keep their cross-record semantics — grouping per Reset Value, order-sensitive control-break, presence gating, repeating-target row keying — exactly as documented at map level. A UDF invocation is not an isolated per-record evaluation context.
 - **Sequential Value** counters persist per `keyname` across executions identically.
 - **Connector Call** performs live connector operations; the connection and operation become dependencies of the UDF itself.
 - **Scripting** works inline and `script.mapping`-component-backed (empty embedded `<ScriptToExecute/>` resolves the referenced script); the same `script.mapping` component may be referenced by more than one step in a single UDF, and it registers as a dependency of the UDF.

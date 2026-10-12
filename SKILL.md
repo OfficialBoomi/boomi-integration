@@ -167,7 +167,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
 │   │   ├── cross_reference_table_component.md # Use when: creating static lookup tables for value translation between systems, using cross reference lookups in maps or parameter values (Set Properties, Message, Notify)
 │   │   ├── process_property_component.md    # Use when: creating typed, reusable process property collections for environment-specific config, reading process property values in Set Properties or Groovy scripts
 │   │   ├── document_cache_component.md      # Use when: creating Document Cache components - defining indexes, keys, profile types for in-memory document caching
-│   │   └── process_extensions.md              # Use when: making connections, operations, or DPPs configurable per-environment via processOverrides and the Environment Extensions API
+│   │   └── process_extensions.md              # Use when: making connections, operations, DPPs, process property components, or cross reference tables configurable per-environment via processOverrides and the Environment Extensions API
 │   │
 │   ├── steps/                   # Process step XML reference documentation
 │   │   ├── start_step.md        # Process entry points. Use when configuring new process canvases - includes scheduled, manual, and listener API processes
@@ -355,7 +355,7 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 - `boomi-component-diff.sh` - Compare two versions of a component via ComponentDiffRequest
     - Required: `--component-id`, `--source <N>`, `--target <N>`
 
-- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` (cannot combine with other filters). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries — which scopes results to the account default branch.
+- `boomi-component-search.sh` - Query components by `--folder <id|name|%pattern%|path>` (flat by default; add `--recursive` for the whole subtree), `--name <%pattern%>`, `--type <csv>` (API-level types — `connector-settings`=connection, `connector-action`=operation), or `--related-to <id>` ("Where Used"; cannot combine with other filters; `--branch <name|id>` scopes it to a branch, defaulting to `BOOMI_DEFAULT_BRANCH_ID`). Writes `active-development/inventories/component_search_<timestamp>.json`; implicit `currentVersion=true`, `deleted=false` on non-related-to queries — which scopes results to the account default branch.
     - 0 components in a folder usually means they sit in subfolders — retry with `--recursive` before reporting the folder empty.
 
 - `boomi-folder-list.sh` - List folders as `id<TAB>fullPath`, plus `active-development/inventories/folder_list_<timestamp>.json`
@@ -530,7 +530,9 @@ When dependencies are unavailable (missing credentials, GUI-required components,
 4. Validate before push
 5. Read sync state and update dependent component references
 
-**Wiring rule:** never wire two outcomes of one step to the same target step — the labels overprint and the canvas becomes unreadable. Interpose one inert Notify per outcome; see `references/BOOMI_THINKING.md` § Converging Outcomes.
+**Wiring rule:** wire every outcome of a multi-path step. Wire an outcome with no work to its own Stop with `continue="true"`. See `references/BOOMI_THINKING.md` § Dragpoints and Output Path Wiring.
+
+**Converging rule:** never wire two outcomes of one step to the same target step — the labels overprint and the canvas becomes unreadable. Interpose one inert Notify per outcome; see `references/BOOMI_THINKING.md` § Converging Outcomes.
 
 **Common XML Mistakes** (see `references/guides/boomi_error_reference.md` Issue #8):
 - Set Properties: Use `shapetype="documentproperties"` NOT `"setproperties"`

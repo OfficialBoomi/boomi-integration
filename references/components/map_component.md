@@ -298,6 +298,8 @@ When using `toTagListKey`, Boomi automatically populates qualifier elements in t
 
 **Auto-population fills an instance; it does not create one.** The mapped source element's existence is what opens the instance — presence, not value. A present-but-empty source therefore opens an instance, writes nothing into it, and the qualifier auto-populates alone: `<ODSREQUEST><USERDATA>0528</USERDATA></ODSREQUEST>`, no payload, no error, execution COMPLETE. An absent source element opens no instance and no qualifier is written. With no qualifier on the target, that same present-but-empty source emits no element at all — an instance with nothing written into it is dropped. The rule is about the map having no value to write, not about how the value went missing: a direct mapping of `""`, a String function whose result is empty, and a Simple Lookup miss are indistinguishable in the output.
 
+**A partially filled instance is still emitted.** If any mapped child has a value, the instance is written without its empty children. A `ChargeIndicator` lookup miss beside a present `Amount` emits `<AllowanceCharge><Amount>800</Amount></AllowanceCharge>`, silently missing a mandatory child. To drop such rows, filter them upstream.
+
 ### keyPath Pattern
 
 The `fromTagListKey` / `toTagListKey` attributes are the only runtime-critical attributes for instance routing. The `[@tagListKey='X']` selectors in `fromKeyPath` are cosmetic metadata for GUI readability — the engine ignores them. All three of these produce identical runtime results:

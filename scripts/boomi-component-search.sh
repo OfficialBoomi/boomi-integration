@@ -10,7 +10,7 @@
 #   bash scripts/boomi-component-search.sh --folder <id|name|path> [--recursive]
 #   bash scripts/boomi-component-search.sh --name '%Invoice%' [--type process]
 #   bash scripts/boomi-component-search.sh --type connector-settings,connector-action
-#   bash scripts/boomi-component-search.sh --related-to <componentId>
+#   bash scripts/boomi-component-search.sh --related-to <componentId> [--branch <name|id>]
 #
 # --type takes the API-level component type, not the Boomi UI label. A Boomi
 # "connection" is type=connector-settings with a subType identifying the
@@ -26,6 +26,7 @@ FOLDER=""
 NAME=""
 TYPES=""
 RELATED_TO=""
+BRANCH=""
 RECURSIVE=false
 
 usage() {
@@ -50,9 +51,11 @@ Filters (at least one required):
                           profile.edi, profile.flatfile, script.processing, ...
                           e.g. process,connector-settings,connector-action
   --related-to <id>       Components the given id references OR is referenced-by
-                          (each output record carries a "relation" field:
-                           "references" or "referenced-by")
-                          (cannot combine with other filters)
+                          (each record's "relation" field says which; cannot
+                          combine with the filters above)
+  --branch <name|id>      With --related-to: resolve versions and consumers on
+                          this branch. Defaults to BOOMI_DEFAULT_BRANCH_ID; with
+                          neither set, referenced-by is not branch-filtered.
 
 Output: active-development/inventories/component_search_<timestamp>.json
 
@@ -70,6 +73,7 @@ while [[ $# -gt 0 ]]; do
     --name)        NAME="$2"; shift 2 ;;
     --type)        TYPES="$2"; shift 2 ;;
     --related-to)  RELATED_TO="$2"; shift 2 ;;
+    --branch)      BRANCH="$2"; shift 2 ;;
     -h|--help)     usage; exit 0 ;;
     -*)            echo "Unknown option: $1" >&2; usage; exit 1 ;;
     *)             echo "Unexpected argument: $1" >&2; usage; exit 1 ;;
@@ -87,6 +91,11 @@ if [[ -n "$RELATED_TO" && ( -n "$FOLDER" || -n "$NAME" || -n "$TYPES" || "$RECUR
   exit 1
 fi
 
+if [[ -z "$RELATED_TO" && -n "$BRANCH" ]]; then
+  echo "ERROR: --branch requires --related-to." >&2
+  exit 1
+fi
+
 if [[ "$RECURSIVE" == true && -z "$FOLDER" ]]; then
   echo "ERROR: --recursive requires --folder." >&2
   exit 1
@@ -98,20 +107,19 @@ out_file="active-development/inventories/component_search_${timestamp}.json"
 
 # --- Tempfile management (trap-based cleanup on any exit path) ---
 TMPFILES=()
+TMPDIR_RUN=$(mktemp -d)
 cleanup_tmpfiles() {
   local f
   # bash 3.2 reads an empty array as unset under set -u; hence the ${arr[@]+...} guard.
   for f in ${TMPFILES[@]+"${TMPFILES[@]}"}; do
     [[ -n "$f" ]] && rm -f "$f"
   done
+  rm -rf "$TMPDIR_RUN"
 }
 trap cleanup_tmpfiles EXIT
 
 mktempfile() {
-  local f
-  f=$(mktemp)
-  TMPFILES+=("$f")
-  echo "$f"
+  mktemp "${TMPDIR_RUN}/tmp.XXXXXX"
 }
 
 # --- Build ComponentMetadata/query expression ---
@@ -165,108 +173,167 @@ build_component_expr() {
 }
 
 # --- Reference-relationship query path ---
-# ComponentReference/query rejects any filter that pins parentComponentId without
-# a companion parentVersion — so resolve the target's current version first.
-# Writes final output atomically via .tmp + mv so a mid-write failure can't
-# leave a 0-byte file in active-development/inventories/.
+# Queries ComponentReference in each direction and joins component metadata.
+# Max ids per ComponentMetadata OR query.
+REF_ID_BATCH=100
+
+related_fail() {
+  local stage="$1" err="$2"
+  log_activity "component-search" "fail" "$RESPONSE_CODE" \
+    "$(jq -cn --arg id "$RELATED_TO" --arg stage "$stage" --arg err "${err:0:500}" \
+       '{mode:"related-to", related_to:$id, stage:$stage, error:$err}')"
+}
+
+# Appends one metadata line to $2 per id in the newline list $1.
+lookup_metadata() {
+  local ids_nl="$1" out="$2" strict="${3:-}"
+  local ids=() id
+  while IFS= read -r id; do [[ -n "$id" ]] && ids+=("$id"); done <<< "$ids_nl"
+  [[ ${#ids[@]} -eq 0 ]] && return 0
+
+  if [[ -n "$BRANCH_ID" ]]; then
+    local xml_file root skipped=0 last_code=""
+    xml_file=$(mktempfile)
+    for id in "${ids[@]}"; do
+      boomi_api --out-file "$xml_file" -X GET "$(build_api_url "Component/${id}~${BRANCH_ID}" false)" \
+        -H "Accept: application/xml"
+      case "$RESPONSE_CODE" in 401|429|5*) return 1 ;; esac
+      root=""
+      [[ "$RESPONSE_CODE" == "200" ]] && root=$({ grep -o '<bns:Component [^>]*>' "$xml_file" || true; } | head -n1)
+      if [[ -z "$root" ]]; then
+        [[ "$strict" == strict ]] && return 1
+        skipped=$((skipped + 1)); last_code="$RESPONSE_CODE"; continue
+      fi
+      jq -cn --arg id "$id" \
+        --arg name "$(tag_attr name "$root")" --arg type "$(tag_attr type "$root")" \
+        --arg folder "$(tag_attr folderName "$root")" --arg ver "$(tag_attr version "$root")" \
+        --arg del "$(tag_attr deleted "$root")" \
+        '{componentId:$id, name:$name, type:$type, folderName:$folder,
+          version:($ver | tonumber? // null), deleted:($del == "true")}' >> "$out"
+    done
+    if [[ "$skipped" -gt 0 ]]; then
+      echo "WARN: ${skipped} component(s) unreadable on branch ${BRANCH} (last HTTP ${last_code}); names omitted." >&2
+    fi
+    return 0
+  fi
+
+  local pages i expr body
+  pages=$(mktempfile)
+  for ((i = 0; i < ${#ids[@]}; i += REF_ID_BATCH)); do
+    expr=$(printf '%s\n' "${ids[@]:i:REF_ID_BATCH}" | jq -R -s -c '
+      split("\n") | map(select(length > 0) | {operator:"EQUALS", property:"componentId", argument:[.]})
+      | {operator:"and", nestedExpression:[
+          (if length == 1 then .[0] else {operator:"or", nestedExpression:.} end),
+          {operator:"EQUALS", property:"currentVersion", argument:["true"]}]}')
+    body=$(jq -cn --argjson e "$expr" '{QueryFilter:{expression:$e}}')
+    paginate_query "ComponentMetadata" "$body" "$pages" || return 1
+  done
+  jq -c '.[] | {componentId, name, type, folderName, version, deleted}' "$pages" >> "$out"
+}
+
+# Value of attr in a single start-tag string.
+tag_attr() {
+  { printf '%s' "$2" | grep -o " $1=\"[^\"]*\"" || true; } | head -n1 \
+    | sed "s/^ $1=\"//;s/\"\$//;s/&lt;/</g;s/&gt;/>/g;s/&quot;/\"/g;s/&apos;/'/g;s/&amp;/\\&/g"
+}
+
+# Appends one ComponentReference query's rows, one per line, to $EDGES.
+query_refs() {
+  local relation="$1" expr="$2" pages body
+  pages=$(mktempfile)
+  body=$(jq -cn --argjson e "$expr" '{QueryFilter:{expression:$e}}')
+  if ! paginate_query "ComponentReference" "$body" "$pages"; then
+    related_fail "${relation}-query" "$RESPONSE_BODY"; return 1
+  fi
+  jq -c --arg rel "$relation" --arg target "$RELATED_TO" \
+    '.[] | .references[]?
+     | select($rel == "references" or .componentId == $target)
+     | {relation:$rel, parentComponentId, parentVersion, componentId, type}' "$pages" >> "$EDGES"
+}
+
 run_related_to() {
-  local related_to="$1"
+  BRANCH_ID=""
+  BRANCH="${BRANCH:-${BOOMI_DEFAULT_BRANCH_ID:-}}"
+  if [[ -n "$BRANCH" ]]; then
+    BRANCH_ID=$(resolve_branch_id "$BRANCH") || { related_fail "resolve-branch" "branch ${BRANCH} not found"; return 1; }
+    local branch_name
+    branch_name=$(resolve_branch_name "$BRANCH_ID" 2>/dev/null) && BRANCH="$branch_name"
+  fi
+  EDGES=$(mktempfile)
+  META=$(mktempfile)
 
-  echo "Resolving current version of ${related_to}..."
-  local meta_expr meta_body meta_url current_version
-  meta_expr=$(jq -cn --arg v "$related_to" '{
-    operator:"and",
-    nestedExpression:[
-      {operator:"EQUALS",property:"componentId",argument:[$v]},
-      {operator:"EQUALS",property:"currentVersion",argument:["true"]}
-    ]
-  }')
-  meta_body=$(jq -cn --argjson e "$meta_expr" '{QueryFilter:{expression:$e}}')
-  meta_url="$(build_api_url "ComponentMetadata/query" false)"
-  boomi_api -X POST "$meta_url" \
-    -H "Accept: application/json" -H "Content-Type: application/json" \
-    -d "$meta_body"
-  if [[ "$RESPONSE_CODE" != "200" ]]; then
-    log_activity "component-search" "fail" "$RESPONSE_CODE" \
-      "$(jq -cn --arg id "$related_to" --arg err "${RESPONSE_BODY:0:500}" \
-         '{mode:"related-to", related_to:$id, stage:"resolve-version", error:$err}')"
-    echo "ERROR: could not resolve ${related_to} (HTTP ${RESPONSE_CODE}): ${RESPONSE_BODY}" >&2
+  echo "Resolving ${RELATED_TO}${BRANCH:+ on branch ${BRANCH}}..."
+  if ! lookup_metadata "$RELATED_TO" "$META" strict; then
+    related_fail "resolve-version" "${RESPONSE_BODY:-HTTP ${RESPONSE_CODE}}"
+    echo "ERROR: could not resolve ${RELATED_TO}${BRANCH:+ on branch ${BRANCH}} (HTTP ${RESPONSE_CODE})${RESPONSE_BODY:+: ${RESPONSE_BODY:0:500}}" >&2
     return 1
   fi
-  current_version=$(echo "$RESPONSE_BODY" | jq -r '.result[0].version // empty')
+  local target current_version
+  target=$(jq -c --arg id "$RELATED_TO" 'select(.componentId == $id)' "$META" | head -n1)
+  current_version=$(printf '%s' "$target" | jq -r '.version // empty')
   if [[ -z "$current_version" ]]; then
-    log_activity "component-search" "fail" "no-current-version" \
-      "$(jq -cn --arg id "$related_to" \
-         '{mode:"related-to", related_to:$id, stage:"resolve-version", error:"component not found or has no current version"}')"
-    echo "ERROR: component ${related_to} not found or has no current version." >&2
+    related_fail "resolve-version" "component not found or has no current version"
+    echo "ERROR: component ${RELATED_TO} not found or has no current version${BRANCH:+ on branch ${BRANCH}}." >&2
     return 1
   fi
-
-  echo "Querying references for ${related_to} (current version ${current_version})..."
-
-  # "references" direction: rows where the target (as parent) references something else.
-  # parentComponentId=target AND parentVersion=target-current-version
-  local expr_ref body_ref refs_pages refs_total
-  expr_ref=$(jq -cn --arg v "$related_to" --arg ver "$current_version" '{
-    operator:"and",
-    nestedExpression:[
-      {operator:"EQUALS",property:"parentComponentId",argument:[$v]},
-      {operator:"EQUALS",property:"parentVersion",argument:[$ver]}
-    ]
-  }')
-  body_ref=$(jq -cn --argjson e "$expr_ref" '{QueryFilter:{expression:$e}}')
-  refs_pages=$(mktempfile)
-  if ! paginate_query "ComponentReference" "$body_ref" "$refs_pages"; then
-    log_activity "component-search" "fail" "$RESPONSE_CODE" \
-      "$(jq -cn --arg id "$related_to" --arg err "${RESPONSE_BODY:0:500}" \
-         '{mode:"related-to", related_to:$id, stage:"references-query", error:$err}')"
-    return 1
+  if [[ "$(printf '%s' "$target" | jq -r '.deleted')" == "true" ]]; then
+    echo "WARN: ${RELATED_TO} is deleted; its current version (${current_version}) references nothing." >&2
   fi
-  refs_total=$TOTAL_COUNT
 
-  # "referenced-by" direction: rows where something else references the target.
-  # componentId=target (no version constraint — match all referrers regardless of their version)
-  local expr_by body_by by_pages by_total
-  expr_by=$(jq -cn --arg v "$related_to" '{operator:"EQUALS",property:"componentId",argument:[$v]}')
-  body_by=$(jq -cn --argjson e "$expr_by" '{QueryFilter:{expression:$e}}')
-  by_pages=$(mktempfile)
-  if ! paginate_query "ComponentReference" "$body_by" "$by_pages"; then
-    log_activity "component-search" "fail" "$RESPONSE_CODE" \
-      "$(jq -cn --arg id "$related_to" --arg err "${RESPONSE_BODY:0:500}" \
-         '{mode:"related-to", related_to:$id, stage:"referenced-by-query", error:$err}')"
-    return 1
+  echo "Querying references for ${RELATED_TO} (version ${current_version})..."
+  query_refs references "$(jq -cn --arg v "$RELATED_TO" --arg ver "$current_version" '
+    {operator:"and", nestedExpression:[
+      {operator:"EQUALS", property:"parentComponentId", argument:[$v]},
+      {operator:"EQUALS", property:"parentVersion", argument:[$ver]}]}')" || return 1
+  query_refs referenced-by "$(jq -cn --arg v "$RELATED_TO" --arg b "$BRANCH_ID" '
+    {operator:"EQUALS", property:"componentId", argument:[$v]} as $c
+    | if $b == "" then $c
+      else {operator:"and", nestedExpression:[$c, {operator:"EQUALS", property:"branchId", argument:[$b]}]} end')" || return 1
+
+  if ! lookup_metadata "$(jq -r 'if .relation == "references" then .componentId else .parentComponentId end' "$EDGES" | sort -u)" "$META"; then
+    echo "WARN: component metadata lookup stopped (HTTP ${RESPONSE_CODE}); remaining names omitted." >&2
   fi
-  by_total=$TOTAL_COUNT
 
   local out_tmp="${out_file}.tmp"
   TMPFILES+=("$out_tmp")
   jq -n \
     --arg ts "$timestamp" \
-    --arg related_to "$related_to" \
+    --arg related_to "$RELATED_TO" \
     --arg ver "$current_version" \
-    --slurpfile refs "$refs_pages" \
-    --slurpfile by "$by_pages" \
-    '{
+    --arg branch "$BRANCH" \
+    --arg branch_id "$BRANCH_ID" \
+    --slurpfile edges "$EDGES" \
+    --slurpfile meta "$META" \
+    '(reduce $meta[] as $m ({}; .[$m.componentId] //= ($m | del(.componentId)))) as $by_id
+    | {
       metadata: {
         timestamp: $ts,
         query: "related-to",
-        filters: { relatedTo: $related_to, resolvedVersion: ($ver | tonumber) }
+        filters: {
+          relatedTo: $related_to,
+          resolvedVersion: ($ver | tonumber),
+          branch: (if $branch == "" then null else {name: $branch, id: $branch_id} end)
+        },
+        target: $by_id[$related_to]
       },
       records: (
-        ((($refs | add) // []) | map(. + {relation:"references"})) +
-        ((($by | add) // []) | map(. + {relation:"referenced-by"}))
+        $edges
+        | sort_by(.relation != "references")
+        | map(. + {related: $by_id[if .relation == "references" then .componentId else .parentComponentId end]})
       )
     }' > "$out_tmp"
   mv "$out_tmp" "$out_file"
 
-  local count
+  local count refs_n by_n
   count=$(jq '.records | length' "$out_file")
+  refs_n=$(jq '[.records[] | select(.relation == "references")] | length' "$out_file")
+  by_n=$(jq '[.records[] | select(.relation == "referenced-by")] | length' "$out_file")
 
   log_activity "component-search" "success" "$RESPONSE_CODE" \
-    "$(jq -cn --arg id "$related_to" --arg ver "$current_version" --argjson c "$count" \
-       '{mode:"related-to", related_to:$id, resolved_version:($ver | tonumber), records:$c}')"
+    "$(jq -cn --arg id "$RELATED_TO" --arg ver "$current_version" --arg branch "$BRANCH" --argjson c "$count" \
+       '{mode:"related-to", related_to:$id, resolved_version:($ver | tonumber), branch:$branch, records:$c}')"
 
-  echo "Found ${count} reference(s) (references: ${refs_total}, referenced-by: ${by_total}) → ${out_file}"
+  echo "Found ${count} reference(s) (references: ${refs_n}, referenced-by: ${by_n}) → ${out_file}"
 }
 
 # --- Dispatch ---

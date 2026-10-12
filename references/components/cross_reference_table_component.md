@@ -18,7 +18,7 @@ Boomi component type string: `type="crossref"` in the `bns:Component` wrapper.
 
 Cross reference tables are static, in-memory lookup tables for value translation between systems. Common uses: code mapping (system A codes to system B codes), status translation, environment-specific parameter values.
 
-Cross reference tables cannot be updated dynamically at runtime.
+**Table edits reach a deployed process only when that process is redeployed** — its package keeps the revision it was deployed with. To change values without a redeploy, override the rows through Environment Extensions; see `process_extensions.md`.
 
 ## Component Structure
 

@@ -557,7 +557,7 @@ Mathematical operations, number formatting, and counters. Every Numeric function
 **Scalar vs. per-record vs. aggregating.** Three behavioral shapes, and the **target profile shape** decides how multi-record results surface:
 - **Scalar Math** (Absolute Value, Add, Subtract, Multiply, Divide, Ceil, Floor, Set Precision, Number Format) — one Result per invocation.
 - **Per-record counters** (Running Total, Line Item Increment, Sequential Value) — emit one value **per output row**. The number of values equals the number of rows the map produces, so **drive iteration with a source→repeating-target mapping**: a lone `function→target` mapping (no source field mapped into the repeating element) yields a single row and the counter fires only once.
-- **Aggregators** (Sum, Count) — collapse across records, producing one value **per unique Reset Value**. Into a **scalar/header** target → **one output document per unique Reset Value**; into a **repeating/detail** target → the group's aggregate is **broadcast onto every member row** of that group.
+- **Aggregators** (Sum, Count) — collapse across records, producing one value **per unique Reset Value**. Into a **scalar/header** target → **one output document per unique Reset Value**. Into a **repeating** target, see Sum below for the row count.
 
 **Exact-decimal arithmetic and error behavior.** Math functions compute in exact decimal, not binary float — `0.1 + 0.2` is exactly `0.3` and `1.1 × 3` is exactly `3.3`, with no drift. A **non-numeric input aborts the whole document** (a `NumberFormatException`-class error), as do a structurally invalid parameter (Number Format with an empty output mask, Set Precision with a non-integer precision) and Math Divide by zero — the same document-failing behavior as any erroring map function. By contrast an **empty or absent operand falls back to that input's `default`** (Math Add with an empty second operand computes as `+ 0`) and does not error.
 
@@ -663,7 +663,16 @@ Maintains a cumulative running total of `Value to Sum`, emitting the incremental
 
 #### Sum (`type="Sum2"`)
 
-Aggregates `Value to Sum` (key=1) into a single total **per unique Reset Value** (key=2). A constant Reset Value yields one grand total (`10.25 + 5.75 + 20.00 = 36.00`); a Reset Value that varies by group yields a separate sum per group (e.g. category A = 30, B = 12). Into a header target the groups surface as one document each; into a repeating target the group sum is broadcast per member row. Grouping is **global and order-insensitive** — records sharing a Reset Value aggregate together even when interleaved (`A,B,A,B` still yields one A total and one B total); an empty/unwired Reset Value puts every record in a single group. **The `type` is `Sum2`, not `Sum`.**
+Aggregates `Value to Sum` (key=1) into a single total **per unique Reset Value** (key=2). A constant Reset Value yields one grand total (`10.25 + 5.75 + 20.00 = 36.00`); a Reset Value that varies by group yields a separate sum per group (e.g. category A = 30, B = 12). Into a header target the groups surface as one document each. Grouping is **global and order-insensitive** — records sharing a Reset Value aggregate together even when interleaved (`A,B,A,B` still yields one A total and one B total); an empty/unwired Reset Value puts every record in a single group. **The `type` is `Sum2`, not `Sum`.**
+
+**Row count in a repeating target.** The map emits one row per distinct combination of non-aggregated values mapped into the repeating element; the Reset Value only decides which records each sum covers. Lines `S 10, Z 5, S 20, Z 7` into a repeating `TaxSubtotal`:
+
+| Mapped into `TaxSubtotal` | Reset Value | Output rows |
+|---|---|---|
+| `Category` + Sum | `Category` | 2: `S=30`, `Z=12` |
+| `Category` + per-line `LineID` + Sum | `Category` | 4: `S=30`, `Z=12`, `S=30`, `Z=12` — summing the rows double-counts |
+
+For one subtotal per group, map only the group key and the Sum into the repeating element, and wire the same key to Reset Value.
 
 ```xml
 <FunctionStep cacheEnabled="false" category="Numeric" key="11"

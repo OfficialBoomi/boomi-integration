@@ -1,12 +1,14 @@
 # Process Extensions (Environment Overrides)
 
-Environment extensions make connection settings, operation settings, and Dynamic Process Properties (DPPs) configurable per-environment without modifying process XML. They are defined in the `<bns:processOverrides>` element at the end of a process component's XML.
+Environment extensions make connection settings, operation settings, Dynamic Process Properties (DPPs), Process Property component values, and cross reference table rows configurable per-environment without modifying process XML. They are defined in the `<bns:processOverrides>` element at the end of a process component's XML.
 
 ## Contents
 - processOverrides XML Structure
 - Connection Overrides
 - Operation Overrides
 - Dynamic Process Property Overrides
+- Process Property Component Overrides
+- Cross Reference Table Overrides
 - Extensions Section (ObjectDefinitions)
 - Managing Extension Values via CLI
 - Authoring Update Payloads
@@ -115,6 +117,28 @@ DPPs must always be read using `valueType="process"` + `<processparameter>`. Usi
 
 **Set Properties interaction:** A Set Properties step that explicitly sets a DPP overwrites the extension-injected value for the remainder of that execution. Extension values are initial values at process start; in-process Set Properties steps take precedence.
 
+## Process Property Component Overrides
+
+Each Process Property component is listed by `componentId`, with one `<OverrideableDefinedProcessPropertyValue>` per property made extensible (`key` and `name` from the component's property definitions):
+
+```xml
+<DefinedProcessPropertyOverrides>
+  <OverrideableDefinedProcessPropertyComponent componentId="{processPropertyComponentId}">
+    <OverrideableDefinedProcessPropertyValue key="{propertyKey}" name="{propertyLabel}" overrideable="true"/>
+  </OverrideableDefinedProcessPropertyComponent>
+</DefinedProcessPropertyOverrides>
+```
+
+**Keep these elements unprefixed**, even though push errors name them in the `http://api.platform.boomi.com/` namespace. A `bns:`-prefixed version passes validation and is silently dropped.
+
+## Cross Reference Table Overrides
+
+```xml
+<CrossReferenceOverrides>
+  <CrossReferenceOverride id="{crossRefTableId}" overrideable="true"/>
+</CrossReferenceOverrides>
+```
+
 ## Extensions Section (ObjectDefinitions)
 
 The `<Extensions>` section is entirely optional and has no effect on runtime behavior, connection overrides, or the Environment Extensions API. It contains GUI-generated metadata about connector types and profile associations.
@@ -150,7 +174,12 @@ When constructing payloads, prefer `boomi-extensions.sh get` → modify → `set
 
 `{"value": ""}` does not clear an override — the platform stores the empty string literally (a URL becomes `""`, a password becomes `""`) and the next execution uses it. To remove an override:
 - **Connection or operation field** — send `{"useDefault": true}` on the field with no `value` key.
-- **DPP** — send the property entry with no `value` key (e.g. `{"name":"DPP_X"}`). `useDefault` applies to connection/operation fields only.
+- **Process-property-component value** — send `{"key":"…","useDefault":true}` on the property value.
+- **DPP** — send the property entry with no `value` key (e.g. `{"name":"DPP_X"}`).
+
+### Setting a value: never pair it with `"useDefault": true`
+
+A `value` sent with `"useDefault": true` is stored but stays inactive, and the next execution silently uses the default. A never-overridden field GETs as `useDefault: true`, so a GET → edit → `set` round-trip hits this. Drop `useDefault` from any entry you set a value on, and confirm `useDefault: false` in the follow-up GET.
 
 ### Encrypted fields
 
@@ -170,9 +199,15 @@ Feed it from a file or stdin the user controls (`boomi-extensions.sh set -`) so 
 
 ### Process-property-component values
 
-These follow the same field-level partial model as connection fields and DPPs: update individual properties without resubmitting siblings, and revert a single property by sending its entry with no `value` key.
+These follow the same field-level partial model as connection fields and DPPs: update individual properties without resubmitting siblings. Unlike a DPP, an entry with no `value` key does not revert.
 
 ### Cross-reference table overrides
 
-Cross-reference tables are standalone platform components, if editing they'll be in active-development as a local file anyway. When overriding their rows via env extensions, submit the entire table — treat the table as the unit of update.
+Cross-reference tables are standalone platform components, if editing they'll be in active-development as a local file anyway. When overriding their rows via env extensions, submit the entire table — treat the table as the unit of update. Row columns are `ref1`, `ref2`, … by position:
+
+```json
+{"crossReferences":{"crossReference":[{"id":"{crossRefTableId}","name":"Country Codes","overrideValues":true,"CrossReferenceRows":{"row":[{"ref1":"SG","ref2":"VALUE_C"}]}}]}}
+```
+
+`"overrideValues": false` reverts to the table revision in the deployed package.
 

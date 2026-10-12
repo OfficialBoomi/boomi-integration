@@ -517,7 +517,8 @@ detect_xml_branch() {
 inject_branch_id() {
   local xml="$1"
   local branch_id="$2"
-  if echo "$xml" | grep -q 'branchId="'; then
+  # Avoid echo|grep -q: SIGPIPE on large XML can flip this under pipefail.
+  if [[ "$xml" == *'branchId="'* ]]; then
     echo "$xml" | sed "s/branchId=\"[^\"]*\"/branchId=\"${branch_id}\"/"
   else
     echo "$xml" | sed "s/<\([a-zA-Z]*:\)\{0,1\}Component /<\1Component branchId=\"${branch_id}\" /"

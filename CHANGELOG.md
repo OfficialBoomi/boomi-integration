@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.0.83
+
+- Cross reference table edits require a redeploy; override values via Environment Extensions instead.
+- Document process-property-component and cross reference table overrides.
+- Fix the process-property revert payload; warn that a `value` sent with `useDefault: true` is ignored.
+- In an EDI profile, `impliedDecimal` controls the implied-decimal shift, not `dataType`.
+- Document Sum's row count in a repeating target, and that a partially filled repeating row is still emitted.
+- Note there is no AS4 Trading Partner communication method.
+
+
+## 1.0.82
+
+- Add component names and `--branch` to `--related-to`
+- Fix `boomi-component-search.sh` leaving temp files behind
+
+
+## 1.0.81
+
+- Require every outcome on multi-path steps to be wired, with a `continue="true"` Stop as the minimum target
+
+
+## 1.0.80
+
+- Fix duplicate `branchId` attribute on large component pushes/pulls
+
+
+## 1.0.79
+
+- Fix Custom Connector step reference to stop shipping an empty `<parameters/>` example
+
+
+## 1.0.78
+
+- Fix outdated Python references in the SSL-verification section of boomi_error_reference.md
+
+
+## 1.0.77
+
+- Fix Event Streams connection example to use a folder ID placeholder instead of folder name
+
+
 ## 1.0.76
 
 - Fix `<Process>` casing in MCP Server snippet

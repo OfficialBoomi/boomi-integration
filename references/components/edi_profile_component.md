@@ -767,7 +767,7 @@ Optional child element that declares valid qualifier values for an element per t
 | `TS` | Timestamp | |
 | `TN` | Telephone Number | |
 
-**N-types vs R: implied decimal shifting.** The parser applies decimal shifting at parse time for N-type data types. A wire value of `6237` with `dataType="N2"` produces `62.37`; the same wire value with `dataType="R"` produces `6237`. This is silent — no error, no warning. Using the wrong type on monetary/quantity fields corrupts values by orders of magnitude. Always match the X12 element spec: amount fields are typically N2, not R.
+**Implied decimal shifting is controlled by `impliedDecimal`, not `dataType`.** The `dataType` label (`N2`, `R`, …) has no effect on parsing. Wire `19360` with `impliedDecimal="2"` parses to `193.6` under `N2` or `R`, and with `impliedDecimal="0"` stays `19360` even under `N2`. A mismatch silently corrupts amounts by orders of magnitude, so set `impliedDecimal` to the N-type's digit count (`N2` → `"2"`).
 
 ### Data Format Elements
 
@@ -1179,8 +1179,11 @@ The platform API schema validator rejects the following. Each rule corresponds t
 <!-- R (real/float) -->
 <DataFormat><ProfileNumberFormat numberFormat="#.#" signedField="false"/></DataFormat>
 
-<!-- N0, N2 (implied decimal) -->
+<!-- N0 -->
 <DataFormat><ProfileNumberFormat numberFormat="" impliedDecimal="0" signedField="false"/></DataFormat>
+
+<!-- N2 -->
+<DataFormat><ProfileNumberFormat numberFormat="" impliedDecimal="2" signedField="false"/></DataFormat>
 ```
 
 ### HL Hierarchy Auto-Generation Pattern
