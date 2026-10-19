@@ -23,8 +23,9 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-component-pull.sh**: Download components from platform to local
 - **boomi-component-diff.sh**: Compare two versions of a component (structured JSON diff)
 - **boomi-version-history.sh**: List component version history
-- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Other queries implicitly filter `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
+- **boomi-component-search.sh**: Query components by folder, name, type, or reference relationship. Writes JSON to `active-development/inventories/component_search_<timestamp>.json`: query context under `metadata`, results under a top-level `records` array. Folder scoping is flat unless `--recursive`; `--folder` accepts an id, exact name, `%` pattern, or path. `--related-to` cannot combine with other filters. Other queries implicitly filter `currentVersion=true`, `deleted=false` — which scopes results to the account default branch.
 - **boomi-folder-list.sh**: List a folder's child folders (or its whole subtree with `--recursive`) as `id<TAB>fullPath`, also written to `active-development/inventories/folder_list_<timestamp>.json`.
+- **boomi-folder-rename.sh**: Rename a folder (`--folder <id|name|path> --new-name <name>`). The folder keeps its id, parent, and contents; descendant `fullPath`s follow the new name. Components inside are not re-versioned, and a pull reports the new `folderName`/`folderFullPath` immediately. Refuses a name already used by a sibling, which the platform would otherwise accept.
 
 **Deployment & Testing**:
 - **boomi-deploy.sh**: Deploy processes to runtime environments
@@ -37,7 +38,7 @@ Specialized bash tools handle different aspects of the development lifecycle. Al
 - **boomi-branch.sh**: Branch lifecycle and merge request operations (subcommand-based)
 
 **Profile Analysis**:
-- **boomi-profile-inspect.py**: Extract field metadata from large profiles (XML, EDI, Flat File) — Python stdlib only, no pip deps
+- **boomi-profile-inspect.py**: Extract field metadata from large profiles — Python stdlib only, no pip deps
 
 **Tool Selection Guide & Decision Tree**:
 
@@ -90,7 +91,7 @@ bash <skill-path>/scripts/boomi-execution-query.sh [--process-id <guid>] [--stat
 bash <skill-path>/scripts/boomi-execution-query.sh --execution-id <execution-id> --logs
 ```
 
-**Component Search** (discovery primitive — results land in `active-development/inventories/<timestamp>.json` for later reference):
+**Component Search** (discovery primitive — results land in `active-development/inventories/component_search_<timestamp>.json` for later reference):
 ```bash
 # Components directly in a folder (flat by default). --folder takes an id, exact
 # name, % pattern, or path; multiple matches are unioned.
@@ -199,7 +200,7 @@ python3 <skill-path>/scripts/boomi-profile-inspect.py active-development/<profil
 
 **When to use**: Run this tool immediately when attempting to Read a profile file and encountering a "file too large" error. The tool extracts element IDs with full hierarchical paths, enabling disambiguation of duplicate field names common in WSDL/SOAP-derived profiles (e.g., 60+ "First_Name" fields in different contexts).
 
-**Supported profile types**: XML, EDI, and Flat File profiles. EDI output includes `purpose` field with semantic context.
+**Supported profile types**: XML, EDI, Flat File, and JSON profiles. EDI output includes `purpose` field with semantic context.
 
 **Workflow after running**:
 1. Tool writes pretty-printed JSON to `distilled_<ProfileName>.json` in the same folder as the source profile XML

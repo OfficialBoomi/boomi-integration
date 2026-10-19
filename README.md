@@ -150,6 +150,7 @@ The skill makes the following CLI tools available to the agent:
 
 - `boomi-env-check.sh` - Checks which .env variables are set without revealing values, and which required CLI tools are installed
 - `boomi-folder-create.sh` - Creates project folders
+- `boomi-folder-rename.sh` - Renames folders
 - `boomi-component-create.sh` - Creates new components
 - `boomi-component-push.sh` - Updates existing components
 - `boomi-component-pull.sh` - Downloads components from platform

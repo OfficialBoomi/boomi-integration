@@ -10,7 +10,6 @@
 - Typed Inputs
 - Script Storage Form
 - Referencing the Component from a Map
-- Authoring Strategies
 - Dependency Visibility
 - Complete Example
 
@@ -96,11 +95,7 @@ A map references a script component through its Scripting FunctionStep. The `<Co
   <Configuration>
     <Scripting componentId="[SCRIPT_COMPONENT_ID]" language="groovy2"
                preserveOrder="true" useCache="true" useComponent="true">
-      <ScriptToExecute><![CDATA[
-String fnEmail = (first_name ?: "").toLowerCase()
-String lnEmail = (last_name  ?: "").toLowerCase()
-corporate_email = fnEmail + "." + lnEmail + "@example.com"
-      ]]></ScriptToExecute>
+      <ScriptToExecute/>
       <Input dataType="character" index="1" name="first_name"/>
       <Input dataType="character" index="2" name="last_name"/>
       <Output index="3" name="corporate_email"/>
@@ -110,15 +105,8 @@ corporate_email = fnEmail + "." + lnEmail + "@example.com"
 ```
 
 - The FunctionStep retains its `<Inputs>`/`<Outputs>` node section (key + name) and the `<Configuration><Scripting>` `<Input dataType../>`/`<Output../>` declarations. These carry the `key`s the map's `<Mappings>` anchor to — author them in a component-backed map exactly as for inline scripting.
-- The runtime resolves and compiles the referenced component's script at request time, so the embedded `<ScriptToExecute>` body is optional — it may be left empty (`<ScriptToExecute/>`) and the platform fetches the referenced script. The referenced script is never written back into the map's stored XML.
-
-## Authoring Strategies
-A single create persists the `componentId` reference and forms the dependency edge — no follow-up update push is needed. Two equivalent ways to author the map's `<ScriptToExecute>`:
-
-1. **Self-contained (embedded body).** Include the full script and the `<Input>`/`<Output>` declarations (mirroring what a pull returns); the embedded body runs directly.
-2. **Thin reference (empty body).** Leave `<ScriptToExecute/>` empty; the runtime resolves and runs the referenced component's script.
-
-Both execute correctly on a normal create.
+- With `useComponent="true"`, the runtime runs the referenced component's script and ignores the embedded `<ScriptToExecute>`, even when it holds different code. Leave it empty (`<ScriptToExecute/>`). A populated body on a pulled map is a stale copy — change the logic by editing the component, not the map.
+- A single create persists the `componentId` reference and forms the dependency edge — no follow-up update push is needed.
 
 ## Dependency Visibility
 The map→script relationship is a standard `DEPENDENT` ComponentReference edge: the map appears as `parentComponentId` with `type="DEPENDENT"`, discoverable from the script component side as a `referenced-by` record. The edge is present as soon as the referencing map is created.

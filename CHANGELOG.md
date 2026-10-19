@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.87
+
+- Map Script components: document that `useComponent="true"` runs the component's script and ignores the map's embedded script; reference example now uses an empty `<ScriptToExecute/>`
+
+
+## 1.0.86
+
+- Add `boomi-folder-rename.sh` to rename a folder in place; it refuses a name already used by a sibling folder.
+
+
+## 1.0.85
+
+- Document `records` key in component search output; fix output filename
+
+
+## 1.0.84
+
+- `boomi-profile-inspect.py` now supports JSON profiles
+- Warns when a JSON profile hit the platform's 5,000-field GUI import limit
+
+
 ## 1.0.83
 
 - Cross reference table edits require a redeploy; override values via Environment Extensions instead.

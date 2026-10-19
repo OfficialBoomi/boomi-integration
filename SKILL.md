@@ -82,7 +82,7 @@ When working on any Boomi process or component modifications:
 
 **READ BEFORE WRITING**: Always read `references/steps/[step_type].md` completely before generating XML. Validation errors typically mean the XML doesn't match documented structure.
 
-**Large Profiles**: When attempting to read an XML profile file and encountering a "file too large" error, immediately run `boomi-profile-inspect.py` (Python stdlib) on it. This generates a searchable `distilled_<name>.json` file alongside the source profile XML. Search that file for field keys/paths, and grep the original XML by key if comments are needed.
+**Large Profiles**: When attempting to read a profile file and encountering a "file too large" error, immediately run `boomi-profile-inspect.py` (Python stdlib) on it. This generates a searchable `distilled_<name>.json` file alongside the source profile XML. Search that file for field keys/paths, and grep the original XML by key if comments are needed.
 
 **External Documentation Strategy:**
 Default to local `references/` — curated for this skill. Beyond it, don't answer platform behavior from memory: start at `https://developer.boomi.com/llms.txt` (root, no `/md`), which fans out to per-section indexes of every page that has a Markdown twin. Fetch a listed page as Markdown by prepending `/md` and appending `.md` (`https://developer.boomi.com/md/docs/Connectors/Testing_connector.md`); unlisted paths return 404 with an HTML body despite the extension, so branch on status and fall back to the HTML page. Prefer the `.md` form for `/docs/api/*` — same operations and schemas at a fraction of the HTML's size — and link users the frontmatter `canonical_html_url`, never the spec JSON. `help.boomi.com` (HTML) works, `community.boomi.com` does not (JavaScript-heavy); if all sources fail, ask the user to paste content — don't proceed without critical information.
@@ -220,6 +220,7 @@ Default to local `references/` — curated for this skill. Beyond it, don't answ
     ├── boomi-env-check.sh       # Report which .env vars are set (without revealing values) and which tools are installed (pre-flight)
     ├── boomi-folder-create.sh   # Create organized project folders on platform
     ├── boomi-folder-list.sh     # List a folder's child folders or whole subtree (id + fullPath)
+    ├── boomi-folder-rename.sh   # Rename a folder in place (id, parent, contents unchanged)
     ├── boomi-component-create.sh # Create new components and push to platform
     ├── boomi-component-push.sh  # Update existing components with local changes
     ├── boomi-component-pull.sh  # Download components with dependency resolution
@@ -361,6 +362,10 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
 - `boomi-folder-list.sh` - List folders as `id<TAB>fullPath`, plus `active-development/inventories/folder_list_<timestamp>.json`
     - No args lists top-level folders; `--folder <id|name|%pattern%|path>` lists its children, `--recursive` its whole subtree
 
+- `boomi-folder-rename.sh` - Rename a folder; its id, parent, and contents are unchanged, so components' `folderId` stays valid
+    - Required: `--folder <id|name|path>` (must resolve to one folder), `--new-name <name>`
+    - Refuses a name a sibling folder already uses (the platform itself would accept the duplicate)
+
 - `boomi-branch.sh` - Branch and merge operations (merge subcommands only for Branch & Merge enabled accounts)
     - `default` — report the account default branch (read-only). Runs on any account; it queries component metadata, not the Branch endpoints.
     - `list` — list all branches
@@ -391,9 +396,10 @@ Specialized tools handle the development lifecycle. All tools are bash scripts (
     - Optional: `--process-id`, `--status`, `--since`, `--limit` (default 3)
     - Log download: `--execution-id <id> --logs` (requires `unzip`; exits non-zero rather than reporting an empty log if extraction fails)
 
-- `boomi-profile-inspect.py` (Python stdlib) - Extract field inventory from large XML profiles
+- `boomi-profile-inspect.py` (Python stdlib) - Extract field inventory from large profiles
     - Required: `profile_path` (positional)
-    - Use when: An XML profile file is too large to read directly. Writes a `distilled_<name>.json` file alongside the source profile XML.
+    - Optional: `--all` (JSON only: also list container nodes)
+    - Use when: A profile file is too large to read directly. Writes a `distilled_<name>.json` file alongside the source profile XML.
     - Python stdlib only — no pip dependencies
 
 - `event-streams-setup.sh` - Create and manage Event Streams topics, subscriptions, and tokens
